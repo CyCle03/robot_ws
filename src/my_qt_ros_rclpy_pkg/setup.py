@@ -24,6 +24,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
+          'helloworld_publisher = my_qt_ros_rclpy_pkg.msg_pub_qt:main',
         ],
     },
 )

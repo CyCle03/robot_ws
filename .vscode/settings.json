@@ -19,6 +19,7 @@
   "editor.guides.bracketPairs": true,
   "editor.semanticHighlighting.enabled": true,
   "editor.formatOnSave": true,
+  "editor.copyWithSyntaxHighlighting": false,
   "terminal.integrated.fontFamily": "Fira Code",
   "terminal.integrated.fontSize": 12,
   "python.autoComplete.extraPaths": [
