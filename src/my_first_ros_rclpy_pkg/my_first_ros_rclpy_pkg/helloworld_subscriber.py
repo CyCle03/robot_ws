@@ -11,7 +11,7 @@ class HelloworldSubscriber(Node):
         qos_profile = QoSProfile(depth=10)
         self.helloworld_subscriber = self.create_subscription(
             String,
-            'helloworld',
+            'massage',
             self.subscribe_topic_message,
             qos_profile)
 
