@@ -25,6 +25,7 @@ setup(
     entry_points={
         'console_scripts': [
             'simple_rotate = my_turtle_controller.simple_rotate:main',
+            'pid_rotate = my_turtle_controller.pid_rotate:main'
         ],
     },
 )
