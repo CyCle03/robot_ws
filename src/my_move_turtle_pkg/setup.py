@@ -30,6 +30,7 @@ setup(
       'dist_turtle_action_server = my_move_turtle_pkg.dist_turtle_action_server:main',
       'my_subscriber = my_move_turtle_pkg.my_subscriber:main',
       'my_multi_thread = my_move_turtle_pkg.my_multi_thread:main',
+      'turtle_move_con = my_move_turtle_pkg.turtle_move_con:main',
     ],
   },
 )

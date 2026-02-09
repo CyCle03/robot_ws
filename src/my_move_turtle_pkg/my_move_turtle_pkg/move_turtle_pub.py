@@ -9,7 +9,6 @@ class Move_turtle(Node):
     super().__init__('move_turtle')
     self.qos_profile = QoSProfile(depth = 10)
     self.move_turtle = self.create_publisher(Twist, 'turtle1/cmd_vel', self.qos_profile)
-    self.timer = self.create_timer(0.1, self.turtle_move)
 
   def turtle_move(self):
     msg = Twist()
@@ -28,11 +27,13 @@ class Move_turtle(Node):
 def main(args=None):
   rclpy.init(args=args)
   node = Move_turtle()
+  timer = node.create_timer(0.1, node.turtle_move)
   try:
     rclpy.spin(node)
   except KeyboardInterrupt:
     node.get_logger().info('Keyboard Interrupt (SIGINT)')
   finally:
+    timer.cancel()
     node.destroy_node()
     rclpy.shutdown()
 
