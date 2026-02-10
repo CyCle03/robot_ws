@@ -5,6 +5,13 @@ if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
 
+# Use C++17 for rclcpp (needed for std::is_convertible_v, etc.)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+# Export compile_commands.json for IDE IntelliSense
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
 # find dependencies
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
@@ -12,9 +19,11 @@ find_package(std_msgs REQUIRED)
 
 # Build
 add_executable(helloworld_publisher src/helloworld_publisher.cpp)
+target_compile_features(helloworld_publisher PUBLIC cxx_std_17)
 ament_target_dependencies(helloworld_publisher rclcpp std_msgs)
 
 add_executable(helloworld_subscriber src/helloworld_subscriber.cpp)
+target_compile_features(helloworld_subscriber PUBLIC cxx_std_17)
 ament_target_dependencies(helloworld_subscriber rclcpp std_msgs)
 
 # Install
