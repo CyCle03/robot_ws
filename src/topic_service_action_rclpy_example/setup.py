@@ -40,6 +40,8 @@ setup(
         'console_scripts': [
             'argument = topic_service_action_rclpy_example.argument:main',
             'calculator = topic_service_action_rclpy_example.calculator:main',
+            'operator = topic_service_action_rclpy_example.operator:main',
+            'checker = topic_service_action_rclpy_example.checker:main',
         ],
     },
 )
