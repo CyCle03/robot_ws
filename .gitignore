@@ -6,3 +6,6 @@ log/
 # Python bytecode
 __pycache__/
 *.pyc
+
+# Local IDE/runtime env
+/.vscode/colcon.env
