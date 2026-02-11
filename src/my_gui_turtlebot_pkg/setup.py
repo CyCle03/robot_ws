@@ -24,6 +24,8 @@ setup(
     },
     entry_points={
         'console_scripts': [
+            'move_turtlebot_pub = my_gui_turtlebot_pkg.move_turtlebot_pub:main',
+            'turtlebot_move_con = my_gui_turtlebot_pkg.turtlebot_move_con:main',
         ],
     },
 )
