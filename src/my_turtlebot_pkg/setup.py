@@ -27,6 +27,8 @@ setup(
             'move_turtle_pub = my_turtlebot_pkg.move_turtle_pub:main',
             'detect_obstacle = my_turtlebot_pkg.detect_obstacle:main',
             'turtle_pose = my_turtlebot_pkg.turtle_pose:main',
+            'patrol_turtle_server = my_turtlebot_pkg.patrol_turtle_server:main',
+            'patrol_turtle_client = my_turtlebot_pkg.patrol_turtle_client:main',
         ],
     },
 )
