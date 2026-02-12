@@ -1,5 +1,3 @@
-import math
-from collections import deque
 from enum import Enum
 
 import rclpy
@@ -14,6 +12,8 @@ from rclpy.qos import DurabilityPolicy
 from rclpy.qos import QoSProfile
 from rclpy.qos import ReliabilityPolicy
 from rclpy.qos import qos_profile_sensor_data
+from .mapper_frontier_utils import extract_frontiers
+from .mapper_frontier_utils import select_goal
 
 
 class ExplorerState(Enum):
@@ -157,95 +157,25 @@ class MapperExplorer(Node):
         return self.get_clock().now().nanoseconds / 1e9
 
     def extract_frontiers(self, map_msg):
-        w = map_msg.info.width
-        h = map_msg.info.height
-        data = map_msg.data
-        frontier_cells = []
-
-        def idx(x, y):
-            return y * w + x
-
-        for y in range(1, h - 1):
-            for x in range(1, w - 1):
-                if data[idx(x, y)] != 0:
-                    continue
-                unknown_neighbor = False
-                for ny in (-1, 0, 1):
-                    for nx in (-1, 0, 1):
-                        if nx == 0 and ny == 0:
-                            continue
-                        if data[idx(x + nx, y + ny)] == -1:
-                            unknown_neighbor = True
-                            break
-                    if unknown_neighbor:
-                        break
-                if unknown_neighbor:
-                    frontier_cells.append((x, y))
-
-        return self.cluster_frontier_cells(map_msg, frontier_cells)
-
-    def cluster_frontier_cells(self, map_msg, frontier_cells):
-        frontier_set = set(frontier_cells)
-        visited = set()
-        clustered_world_points = []
-
-        for cell in frontier_cells:
-            if cell in visited:
-                continue
-            queue = deque([cell])
-            visited.add(cell)
-            cluster = []
-
-            while queue:
-                cx, cy = queue.popleft()
-                cluster.append((cx, cy))
-                for ny in (-1, 0, 1):
-                    for nx in (-1, 0, 1):
-                        if nx == 0 and ny == 0:
-                            continue
-                        nb = (cx + nx, cy + ny)
-                        if nb in frontier_set and nb not in visited:
-                            visited.add(nb)
-                            queue.append(nb)
-
-            if len(cluster) < self.frontier_min_cluster_size:
-                continue
-
-            mean_x = sum(c[0] for c in cluster) / len(cluster)
-            mean_y = sum(c[1] for c in cluster) / len(cluster)
-            wx, wy = self.grid_to_world(map_msg, mean_x, mean_y)
-            clustered_world_points.append((wx, wy))
-
-        return clustered_world_points
+        return extract_frontiers(map_msg, self.frontier_min_cluster_size)
 
     def select_goal(self, frontiers):
-        best = None
-        best_score = -1e18
-        for fx, fy in frontiers:
-            key = (round(fx, 2), round(fy, 2))
-            if key in self.blacklist:
-                continue
-
-            d = math.hypot(fx - self.robot_x, fy - self.robot_y)
-            if d < 0.35:
-                continue
-
-            obs = self.obstacle_density(self.map_msg, fx, fy, radius_cells=6)
-            if obs > 0.45:
-                continue
-
-            info = self.unknown_gain(self.map_msg, fx, fy, radius_cells=6)
-            v = self.visited_count.get(key, 0)
-            score = self.w_obs * obs + self.w_info * info - self.w_dist * d - self.w_visit * v
-
-            if self.phase == Phase.RICH and obs < self.rich_min_density:
-                continue
-
-            if score > best_score:
-                best_score = score
-                best = (fx, fy)
-
-        return best
+        return select_goal(
+            frontiers=frontiers,
+            map_msg=self.map_msg,
+            robot_x=self.robot_x,
+            robot_y=self.robot_y,
+            blacklist=self.blacklist,
+            visited_count=self.visited_count,
+            phase=self.phase.name,
+            rich_min_density=self.rich_min_density,
+            w_dist=self.w_dist,
+            w_obs=self.w_obs,
+            w_info=self.w_info,
+            w_visit=self.w_visit,
+            min_goal_distance=0.35,
+            max_obstacle_density=0.45,
+        )
 
     def send_nav_goal(self, goal_xy):
         if not self.nav_client.wait_for_server(timeout_sec=1.0):
@@ -315,65 +245,6 @@ class MapperExplorer(Node):
         self.goal_handle = None
         self.goal_sent_time_sec = None
         self.state = ExplorerState.EVALUATE
-
-    def world_to_grid(self, map_msg, wx, wy):
-        ox = map_msg.info.origin.position.x
-        oy = map_msg.info.origin.position.y
-        res = map_msg.info.resolution
-        gx = int((wx - ox) / res)
-        gy = int((wy - oy) / res)
-        return gx, gy
-
-    def grid_to_world(self, map_msg, gx, gy):
-        ox = map_msg.info.origin.position.x
-        oy = map_msg.info.origin.position.y
-        res = map_msg.info.resolution
-        wx = ox + (gx + 0.5) * res
-        wy = oy + (gy + 0.5) * res
-        return wx, wy
-
-    def obstacle_density(self, map_msg, wx, wy, radius_cells=6):
-        gx, gy = self.world_to_grid(map_msg, wx, wy)
-        w = map_msg.info.width
-        h = map_msg.info.height
-        data = map_msg.data
-        occ = 0
-        total = 0
-        for dy in range(-radius_cells, radius_cells + 1):
-            for dx in range(-radius_cells, radius_cells + 1):
-                x = gx + dx
-                y = gy + dy
-                if x < 0 or x >= w or y < 0 or y >= h:
-                    continue
-                v = data[y * w + x]
-                if v < 0:
-                    continue
-                total += 1
-                if v > 50:
-                    occ += 1
-        if total == 0:
-            return 0.0
-        return occ / total
-
-    def unknown_gain(self, map_msg, wx, wy, radius_cells=6):
-        gx, gy = self.world_to_grid(map_msg, wx, wy)
-        w = map_msg.info.width
-        h = map_msg.info.height
-        data = map_msg.data
-        unk = 0
-        total = 0
-        for dy in range(-radius_cells, radius_cells + 1):
-            for dx in range(-radius_cells, radius_cells + 1):
-                x = gx + dx
-                y = gy + dy
-                if x < 0 or x >= w or y < 0 or y >= h:
-                    continue
-                total += 1
-                if data[y * w + x] == -1:
-                    unk += 1
-        if total == 0:
-            return 0.0
-        return unk / total
 
     def cancel_active_goal(self, reason='manual'):
         if self.goal_handle is None:
