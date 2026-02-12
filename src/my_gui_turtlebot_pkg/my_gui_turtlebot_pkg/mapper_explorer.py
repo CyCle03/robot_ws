@@ -56,8 +56,8 @@ class MapperExplorer(Node):
         self.last_status = None
 
         self.rich_min_density = 0.0
-        self.goal_timeout_sec = 60.0
-        self.max_goal_retries = 2
+        self.goal_timeout_sec = 120.0
+        self.max_goal_retries = 1
         self.frontier_min_cluster_size = 3
         self.w_dist = 1.0
         self.w_obs = 1.5
@@ -125,6 +125,9 @@ class MapperExplorer(Node):
                 if elapsed > self.goal_timeout_sec:
                     if self.goal_handle is None:
                         self.get_logger().warning('Goal timeout before acceptance.')
+                        if self.current_goal is not None:
+                            key = (round(self.current_goal[0], 2), round(self.current_goal[1], 2))
+                            self.blacklist.add(key)
                         self.goal_active = False
                         self.last_status = GoalStatus.STATUS_ABORTED
                         self.state = ExplorerState.EVALUATE
@@ -224,7 +227,13 @@ class MapperExplorer(Node):
                 continue
 
             d = math.hypot(fx - self.robot_x, fy - self.robot_y)
+            if d < 0.35:
+                continue
+
             obs = self.obstacle_density(self.map_msg, fx, fy, radius_cells=6)
+            if obs > 0.45:
+                continue
+
             info = self.unknown_gain(self.map_msg, fx, fy, radius_cells=6)
             v = self.visited_count.get(key, 0)
             score = self.w_obs * obs + self.w_info * info - self.w_dist * d - self.w_visit * v
@@ -383,6 +392,9 @@ class MapperExplorer(Node):
         if response is not None and len(response.goals_canceling) > 0:
             self.get_logger().info(f'Goal canceled ({reason}).')
             self.last_status = GoalStatus.STATUS_CANCELED
+            if reason == 'timeout' and self.current_goal is not None:
+                key = (round(self.current_goal[0], 2), round(self.current_goal[1], 2))
+                self.blacklist.add(key)
         else:
             self.get_logger().warning(f'Goal cancel rejected ({reason}).')
             self.last_status = GoalStatus.STATUS_ABORTED

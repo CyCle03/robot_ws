@@ -10,6 +10,9 @@
 - 장애물 회피: `detect_obstacle.py`
 - 속도 중재기: `cmd_vel_arbiter.py`
 - 통합 실행 launch: `launch/gui_turtlebot_system.launch.py`
+- Frontier 탐색 노드: `mapper_explorer.py`
+- Frontier 단독 실행 launch: `launch/mapper_explorer.launch.py`
+- RViz 설정 파일: `rviz/explorer.rviz`
 
 ## 3. 토픽 명세
 - 입력 토픽(중재기 기준):
@@ -27,7 +30,7 @@
 - 우선순위:
   - `avoid > patrol > manual`
 - 소스 타임아웃:
-  - 기본 `0.5s` 내 최신 메시지만 유효
+  - 기본 `1.0s` 내 최신 메시지만 유효
 - 비상정지:
   - 활성화 시 모든 입력을 무시하고 `Twist(0,0)`만 출력
 
@@ -79,9 +82,45 @@
 
 ## 9. 의존성
 - `rclpy`
+- `action_msgs`
 - `geometry_msgs`
 - `nav_msgs`
+- `nav2_msgs`
 - `sensor_msgs`
 - `std_srvs`
 - `turtlebot3_msgs`
 - `launch`, `launch_ros`
+
+## 10. Frontier 탐색(MapperExplorer) 명세
+- 파일: `my_gui_turtlebot_pkg/mapper_explorer.py`
+- 입력:
+  - `/map` (`nav_msgs/msg/OccupancyGrid`, `TRANSIENT_LOCAL`)
+  - `/odom` (`nav_msgs/msg/Odometry`)
+- 출력:
+  - `NavigateToPose` goal 전송(`/navigate_to_pose`)
+- 상태 머신:
+  - `IDLE -> SELECT_GOAL -> NAVIGATING -> EVALUATE -> (반복 또는 DONE)`
+- 탐색 단계:
+  - `RICH`: 장애물 밀도 높은 frontier 우선
+  - `COVERAGE`: 남은 frontier 커버리지 탐색
+
+## 11. Frontier 선택/예외 처리 정책
+- Frontier 추출:
+  - `free(0)` 셀 중 주변 8-neighbor에 `unknown(-1)`이 존재하는 셀을 후보로 추출
+  - BFS 클러스터링 후 클러스터 중심점을 goal 후보로 사용
+- 선택 필터:
+  - 로봇과 너무 가까운 goal 제외: `distance < 0.35m`
+  - 장애물 과밀 goal 제외: `obstacle_density > 0.45`
+- 점수식:
+  - `score = w_obs*obs + w_info*info - w_dist*distance - w_visit*visited_penalty`
+- 타임아웃/재시도:
+  - goal timeout: `120s`
+  - timeout 취소 발생 시 해당 goal 즉시 blacklist
+  - goal 재시도 제한: `max_goal_retries = 1`
+
+## 12. 매핑 실행 시 주의사항
+- SLAM은 하나만 실행해야 함 (`slam_toolbox`와 `cartographer` 동시 실행 금지)
+- `mapper_explorer.launch.py`는 탐색 노드만 실행하므로 아래 스택이 별도로 선행되어야 함:
+  - Gazebo/Robot bringup (`/odom`, TF)
+  - SLAM (`/map`)
+  - Nav2 (`/navigate_to_pose`)
