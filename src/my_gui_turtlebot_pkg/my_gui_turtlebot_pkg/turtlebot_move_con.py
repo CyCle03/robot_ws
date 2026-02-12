@@ -53,14 +53,17 @@ class MainWindow(QMainWindow):
     def turtle_move(self):
         if not self.enabled:
             return
+        self.publish_cmd(self.velocity, self.angular)
+
+    def publish_cmd(self, linear_x, angular_z):
         msg = Twist()
-        msg.linear.x = self.velocity
+        msg.linear.x = linear_x
         msg.linear.y = 0.0
         msg.linear.z = 0.0
 
         msg.angular.x = 0.0
         msg.angular.y = 0.0
-        msg.angular.z = self.angular
+        msg.angular.z = angular_z
         self.pub_move.move_turtle.publish(msg)
         self.pub_move.get_logger().info(f'Published mesage: {msg.linear}, {msg.angular}')
         #자동스크롤
@@ -75,9 +78,10 @@ class MainWindow(QMainWindow):
         return max(low, min(value, high))
 
     def btn_stop_clicked(self):
+        self.enabled = False
         self.velocity = 0.0
         self.angular = 0.0
-        self.enabled = False
+        self.publish_cmd(self.velocity, self.angular)
 
     def btn_go_clicked(self):
         self.velocity = self.clamp(self.velocity + 0.2, -0.6 , 0.6)
