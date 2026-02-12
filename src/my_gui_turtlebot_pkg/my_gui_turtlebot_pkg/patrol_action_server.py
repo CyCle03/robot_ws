@@ -43,7 +43,7 @@ class PatrolActionServer(Node):
 
         qos = QoSProfile(depth=10)
 
-        self.cmd_vel_pub = self.create_publisher(Twist, 'cmd_vel', qos)
+        self.cmd_vel_pub = self.create_publisher(Twist, 'cmd_vel_patrol', qos)
 
         self.odom_sub = self.create_subscription(
             Odometry, 'odom', self.odom_callback, qos

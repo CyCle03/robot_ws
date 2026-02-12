@@ -1,43 +1,87 @@
-# 기능명세서 (TurtleBot GUI 이동 제어)
+# 기능명세서 (my_gui_turtlebot_pkg)
 
 ## 1. 목적
-- GUI 버튼으로 TurtleBot의 선속도/각속도를 제어하고 `cmd_vel`을 주기적으로 발행한다.
+- GUI 수동 제어, Patrol Action 제어, 장애물 회피 제어를 통합하고 최종 `/cmd_vel` 출력을 단일 노드에서 중재한다.
 
-## 2. 대상 파일
-- `src/my_gui_turtlebot_pkg/my_gui_turtlebot_pkg/turtlebot_move_con.py`
+## 2. 아키텍처 개요
+- 수동 제어 노드: `turtlebot_move_con.py` + `move_turtlebot_pub.py`
+- 액션 클라이언트: `patrol_action_client.py`
+- 액션 서버: `patrol_action_server.py`
+- 장애물 회피: `detect_obstacle.py`
+- 속도 중재기: `cmd_vel_arbiter.py`
+- 통합 실행 launch: `launch/gui_turtlebot_system.launch.py`
 
-## 3. 주요 기능
-- `Go` 버튼: 선속도 증가 (`+0.2`, 범위 `-0.6 ~ 0.6`)
-- `Back` 버튼: 선속도 감소 (`-0.2`, 범위 `-0.6 ~ 0.6`)
-- `Left` 버튼: 각속도 증가 (`+0.1`, 범위 `-1.0 ~ 1.0`)
-- `Right` 버튼: 각속도 감소 (`-0.1`, 범위 `-1.0 ~ 1.0`)
-- `Stop` 버튼:
-  - 제어 비활성화 (`enabled=False`)
-  - 선속도/각속도 즉시 `0.0`으로 초기화
-  - 정지 명령(`Twist(0,0)`) 1회 즉시 발행
-- 주기 발행:
-  - 타이머 주기 `0.1s`(10Hz)
-  - `enabled=True`일 때만 현재 속도값 발행
-  - `enabled=False`일 때 주기 발행 중단
-- 로그 표시:
-  - 발행값 `(linear.x, angular.z)`를 UI 리스트에 추가
-  - 자동 스크롤
+## 3. 토픽 명세
+- 입력 토픽(중재기 기준):
+  - `/cmd_vel_manual` (`geometry_msgs/msg/Twist`): GUI 수동 속도
+  - `/cmd_vel_patrol` (`geometry_msgs/msg/Twist`): Patrol 액션 속도
+  - `/cmd_vel_avoid` (`geometry_msgs/msg/Twist`): 장애물 회피 속도
+- 출력 토픽:
+  - `/cmd_vel` (`geometry_msgs/msg/Twist`): 로봇 최종 구동 명령
+- 기타:
+  - `scan` (`sensor_msgs/msg/LaserScan`): 장애물 회피 입력
+  - `odom` (`nav_msgs/msg/Odometry`): Patrol 회전 제어 입력
 
-## 4. 입출력 명세
-- 입력:
-  - GUI 버튼 이벤트 (`btn_go`, `btn_back`, `btn_left`, `btn_right`, `btn_stop`)
-- 출력:
-  - ROS2 토픽 `cmd_vel` (`geometry_msgs/msg/Twist`)
-  - UI 로그 리스트(`listWidget`)
-  - ROS logger info
+## 4. 중재(Arbiter) 규칙
+- 파일: `my_gui_turtlebot_pkg/cmd_vel_arbiter.py`
+- 우선순위:
+  - `avoid > patrol > manual`
+- 소스 타임아웃:
+  - 기본 `0.5s` 내 최신 메시지만 유효
+- 비상정지:
+  - 활성화 시 모든 입력을 무시하고 `Twist(0,0)`만 출력
 
-## 5. 상태 변수
-- `velocity` (float): 선속도
-- `angular` (float): 각속도
-- `enabled` (bool): 주기 발행 활성/비활성
-- `angular_step` (float): 각속도 증감폭 (`0.1`)
-- `angular_limit` (float): 각속도 제한값 (`1.0`)
+## 5. Service 명세
+- `set_obstacle_avoid_enabled` (`std_srvs/srv/SetBool`)
+  - 서버: `detect_obstacle.py`
+  - 기능: 장애물 회피 ON/OFF
+- `set_manual_enabled` (`std_srvs/srv/SetBool`)
+  - 서버: `cmd_vel_arbiter.py`
+  - 기능: 수동 입력 반영 ON/OFF
+- `set_patrol_enabled` (`std_srvs/srv/SetBool`)
+  - 서버: `cmd_vel_arbiter.py`
+  - 기능: Patrol 입력 반영 ON/OFF
+- `set_avoid_enabled` (`std_srvs/srv/SetBool`)
+  - 서버: `cmd_vel_arbiter.py`
+  - 기능: Avoid 입력 반영 ON/OFF
+- `set_emergency_stop` (`std_srvs/srv/SetBool`)
+  - 서버: `cmd_vel_arbiter.py`
+  - 기능: 비상정지 상태 ON/OFF
+- `emergency_stop` (`std_srvs/srv/Trigger`)
+  - 서버: `cmd_vel_arbiter.py`
+  - 기능: 비상정지 즉시 활성화
 
-## 6. 제약/예외
-- 모든 속도값은 `clamp()`로 제한 범위 내 유지
-- 창 종료 시 executor/thread를 정상 종료하여 리소스 정리
+## 6. Action 명세
+- 액션 타입: `turtlebot3_msgs/action/Patrol`
+- 액션 이름: `turtlebot3`
+- 클라이언트: `patrol_action_client.py`
+  - goal 전송, feedback 수신, result 수신, cancel 요청
+- 서버: `patrol_action_server.py`
+  - goal 수락/실행, feedback 발행, result 반환
+  - cancel 요청 수락 및 주행 루프 중 취소 처리 지원
+
+## 7. GUI 기능
+- 파일: `my_gui_turtlebot_pkg/turtlebot_move_con.py`
+- 버튼 기능:
+  - `Go/Back/Left/Right/Stop`: 수동 속도 제어
+  - `patrol(sqr)/patrol(tri)`: Patrol goal 전송
+  - `patrol stop`: Patrol cancel + 수동 stop 호출
+- 수동 속도 명령은 `/cmd_vel_manual`로 주기 발행(10Hz)
+
+## 8. 실행 방법
+- 단일 launch 실행:
+  - `ros2 launch my_gui_turtlebot_pkg gui_turtlebot_system.launch.py`
+- launch 포함 노드:
+  - `cmd_vel_arbiter`
+  - `patrol_action_server`
+  - `detect_obstacle`
+  - `turtlebot_move_con`
+
+## 9. 의존성
+- `rclpy`
+- `geometry_msgs`
+- `nav_msgs`
+- `sensor_msgs`
+- `std_srvs`
+- `turtlebot3_msgs`
+- `launch`, `launch_ros`

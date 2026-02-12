@@ -8,7 +8,7 @@ class Move_turtle(Node):
   def __init__(self):
     super().__init__('move_turtle')
     self.qos_profile = QoSProfile(depth = 10)
-    self.move_turtle = self.create_publisher(Twist, '/cmd_vel', self.qos_profile)
+    self.move_turtle = self.create_publisher(Twist, '/cmd_vel_manual', self.qos_profile)
 
   def turtle_move(self):
     msg = Twist()
