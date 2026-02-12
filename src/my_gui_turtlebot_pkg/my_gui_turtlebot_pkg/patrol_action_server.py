@@ -6,6 +6,7 @@ from geometry_msgs.msg import Twist
 from nav_msgs.msg import Odometry
 import rclpy
 from rclpy.action import ActionServer
+from rclpy.action import CancelResponse
 from rclpy.action import GoalResponse
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.node import Node
@@ -28,7 +29,8 @@ class PatrolActionServer(Node):
             'turtlebot3',
             self.execute_callback,
             callback_group=ReentrantCallbackGroup(),
-            goal_callback=self.goal_callback)
+            goal_callback=self.goal_callback,
+            cancel_callback=self.cancel_callback)
 
         self.goal_msg = Patrol.Goal()
         self.twist = Twist()
@@ -61,8 +63,11 @@ class PatrolActionServer(Node):
         cosy = 1.0 - 2.0 * (q.y * q.y + q.z * q.z)
         return math.atan2(siny, cosy)
 
-    def go_front(self, position, length):
+    def go_front(self, goal_handle, position, length):
         while True:
+            if goal_handle.is_cancel_requested:
+                self.init_twist()
+                return False
             position += self.twist.linear.x
             if position >= length:
                 break
@@ -72,12 +77,16 @@ class PatrolActionServer(Node):
 
             time.sleep(1)
         self.init_twist()
+        return True
 
-    def turn(self, target_angle):
+    def turn(self, goal_handle, target_angle):
         initial_yaw = self.get_yaw()
         target_yaw = initial_yaw + (target_angle * math.pi / 180.0)
 
         while True:
+            if goal_handle.is_cancel_requested:
+                self.init_twist()
+                return False
             rclpy.spin_once(self, timeout_sec=0.1)
 
             current_yaw = self.get_yaw()
@@ -96,33 +105,48 @@ class PatrolActionServer(Node):
             self.cmd_vel_pub.publish(self.twist)
 
         self.init_twist()
+        return True
 
     def goal_callback(self, goal_request):
         self.goal_msg = goal_request
 
         return GoalResponse.ACCEPT
 
+    def cancel_callback(self, goal_handle):
+        self.get_logger().info('Received cancel request.')
+        return CancelResponse.ACCEPT
+
     def execute_callback(self, goal_handle):
         self.get_logger().info('Executing goal...')
         feedback_msg = Patrol.Feedback()
+        result = Patrol.Result()
 
         length = self.goal_msg.goal.y
         iteration = int(self.goal_msg.goal.z)
 
-        while True:
-            if self.goal_msg.goal.x == 1:
-                for count in range(iteration):
-                    self.square(feedback_msg, goal_handle, length)
-                feedback_msg.state = 'square patrol complete!!'
-                break
-            elif self.goal_msg.goal.x == 2:
-                for count in range(iteration):
-                    self.triangle(feedback_msg, goal_handle, length)
-                feedback_msg.state = 'triangle patrol complete!!'
-                break
+        if self.goal_msg.goal.x == 1:
+            for _ in range(iteration):
+                if not self.square(feedback_msg, goal_handle, length):
+                    goal_handle.canceled()
+                    result.result = 'patrol canceled'
+                    self.get_logger().info('Patrol canceled.')
+                    return result
+            feedback_msg.state = 'square patrol complete!!'
+        elif self.goal_msg.goal.x == 2:
+            for _ in range(iteration):
+                if not self.triangle(feedback_msg, goal_handle, length):
+                    goal_handle.canceled()
+                    result.result = 'patrol canceled'
+                    self.get_logger().info('Patrol canceled.')
+                    return result
+            feedback_msg.state = 'triangle patrol complete!!'
+        else:
+            goal_handle.abort()
+            result.result = 'invalid patrol mode'
+            self.get_logger().warning('Invalid patrol mode.')
+            return result
 
         goal_handle.succeed()
-        result = Patrol.Result()
         result.result = feedback_msg.state
 
         self.init_twist()
@@ -138,14 +162,17 @@ class PatrolActionServer(Node):
             self.position.x = 0.0
             self.angle = 0.0
 
-            self.go_front(self.position.x, length)
-            self.turn(90.0)
+            if not self.go_front(goal_handle, self.position.x, length):
+                return False
+            if not self.turn(goal_handle, 90.0):
+                return False
 
             feedback_msg.state = 'line ' + str(i + 1)
             goal_handle.publish_feedback(feedback_msg)
             time.sleep(0.1)
 
         self.init_twist()
+        return True
 
     def triangle(self, feedback_msg, goal_handle, length):
         self.linear_x = 0.2
@@ -155,14 +182,17 @@ class PatrolActionServer(Node):
             self.position.x = 0.0
             self.angle = 0.0
 
-            self.go_front(self.position.x, length)
-            self.turn(120.0)
+            if not self.go_front(goal_handle, self.position.x, length):
+                return False
+            if not self.turn(goal_handle, 120.0):
+                return False
 
             feedback_msg.state = 'line ' + str(i + 1)
             goal_handle.publish_feedback(feedback_msg)
             time.sleep(1)
 
         self.init_twist()
+        return True
 
 
 def main(args=None):
