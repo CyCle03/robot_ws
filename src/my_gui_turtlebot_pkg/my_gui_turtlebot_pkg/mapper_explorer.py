@@ -10,7 +10,10 @@ from nav_msgs.msg import OccupancyGrid
 from nav_msgs.msg import Odometry
 from rclpy.action import ActionClient
 from rclpy.node import Node
+from rclpy.qos import DurabilityPolicy
 from rclpy.qos import QoSProfile
+from rclpy.qos import ReliabilityPolicy
+from rclpy.qos import qos_profile_sensor_data
 
 
 class ExplorerState(Enum):
@@ -29,11 +32,17 @@ class Phase(Enum):
 class MapperExplorer(Node):
     def __init__(self):
         super().__init__('mapper_explorer')
-        qos = QoSProfile(depth=10)
+        map_qos = QoSProfile(
+            depth=1,
+            reliability=ReliabilityPolicy.RELIABLE,
+            durability=DurabilityPolicy.TRANSIENT_LOCAL,
+        )
 
         self.map_msg = None
         self.robot_x = None
         self.robot_y = None
+        self._map_rx_logged = False
+        self._odom_rx_logged = False
         self.state = ExplorerState.IDLE
         self.phase = Phase.RICH
         self.goal_active = False
@@ -46,26 +55,32 @@ class MapperExplorer(Node):
         self.last_result = None
         self.last_status = None
 
-        self.rich_min_density = 0.10
+        self.rich_min_density = 0.0
         self.goal_timeout_sec = 60.0
         self.max_goal_retries = 2
-        self.frontier_min_cluster_size = 10
+        self.frontier_min_cluster_size = 3
         self.w_dist = 1.0
         self.w_obs = 1.5
         self.w_info = 1.0
         self.w_visit = 0.8
 
         self.nav_client = ActionClient(self, NavigateToPose, '/navigate_to_pose')
-        self.create_subscription(OccupancyGrid, '/map', self.map_callback, qos)
-        self.create_subscription(Odometry, '/odom', self.odom_callback, qos)
+        self.create_subscription(OccupancyGrid, '/map', self.map_callback, map_qos)
+        self.create_subscription(Odometry, '/odom', self.odom_callback, qos_profile_sensor_data)
         self.timer = self.create_timer(1.0, self.step)
 
     def map_callback(self, msg):
         self.map_msg = msg
+        if not self._map_rx_logged:
+            self.get_logger().info('Received /map')
+            self._map_rx_logged = True
 
     def odom_callback(self, msg):
         self.robot_x = msg.pose.pose.position.x
         self.robot_y = msg.pose.pose.position.y
+        if not self._odom_rx_logged:
+            self.get_logger().info('Received /odom')
+            self._odom_rx_logged = True
 
     def step(self):
         if self.map_msg is None or self.robot_x is None:
@@ -77,6 +92,7 @@ class MapperExplorer(Node):
 
         if self.state == ExplorerState.SELECT_GOAL:
             frontiers = self.extract_frontiers(self.map_msg)
+            self.get_logger().info(f'Frontier clusters: {len(frontiers)}')
             if not frontiers:
                 if self.phase == Phase.RICH:
                     self.phase = Phase.COVERAGE
@@ -242,6 +258,7 @@ class MapperExplorer(Node):
 
         self.goal_active = True
         self.goal_sent_time_sec = self._now_sec()
+        self.get_logger().info(f'Send goal: x={gx:.2f}, y={gy:.2f}, phase={self.phase.name}')
         future = self.nav_client.send_goal_async(goal)
         future.add_done_callback(self.goal_response_callback)
 
