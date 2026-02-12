@@ -1,5 +1,4 @@
 import math
-import threading
 import time
 
 from geometry_msgs.msg import Point
@@ -15,12 +14,12 @@ from rclpy.qos import QoSProfile
 from turtlebot3_msgs.action import Patrol
 
 
-class Turtlebot3PatrolServer(Node):
+class PatrolActionServer(Node):
 
     def __init__(self):
-        super().__init__('turtlebot3_patrol_server')
+        super().__init__('patrol_action_server')
 
-        print('TurtleBot3 Patrol Server')
+        print('Patrol Action Server')
         print('----------------------------------------------')
 
         self._action_server = ActionServer(
@@ -128,7 +127,6 @@ class Turtlebot3PatrolServer(Node):
 
         self.init_twist()
         self.get_logger().info('Patrol complete.')
-        threading.Timer(0.1, rclpy.shutdown).start()
 
         return result
 
@@ -170,9 +168,9 @@ class Turtlebot3PatrolServer(Node):
 def main(args=None):
     rclpy.init(args=args)
 
-    turtlebot3_patrol_server = Turtlebot3PatrolServer()
+    patrol_action_server = PatrolActionServer()
 
-    rclpy.spin(turtlebot3_patrol_server)
+    rclpy.spin(patrol_action_server)
 
 
 if __name__ == '__main__':
