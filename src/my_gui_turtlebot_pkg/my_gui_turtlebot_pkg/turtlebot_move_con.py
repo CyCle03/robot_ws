@@ -46,6 +46,10 @@ class MainWindow(QMainWindow):
         self.pub_move.timer = self.pub_move.create_timer(0.1, self.turtle_move)
         self.velocity = 0.0
         self.angular = 0.0
+        self.angular_step = 0.2
+        self.angular_limit = 1.0
+        self.velocity_step = 0.2
+        self.velocity_limit = 0.6
         self.enabled = False
         self.executor.add_node(self.pub_move)
         self.rclpy_thread.start()
@@ -84,19 +88,19 @@ class MainWindow(QMainWindow):
         self.publish_cmd(self.velocity, self.angular)
 
     def btn_go_clicked(self):
-        self.velocity = self.clamp(self.velocity + 0.2, -0.6 , 0.6)
+        self.velocity = self.clamp(self.velocity + self.velocity_step, -self.velocity_limit , self.velocity_limit)
         self.enabled = True
 
     def btn_back_clicked(self):
-        self.velocity =self.clamp(self.velocity - 0.2, -0.6 , 0.6)
+        self.velocity = self.clamp(self.velocity - self.velocity_step, -self.velocity_limit , self.velocity_limit)
         self.enabled = True
 
     def btn_right_clicked(self):
-        self.angular = self.clamp(self.angular - 0.2, -2.0, 2.0)
+        self.angular = self.clamp(self.angular - self.angular_step, -self.angular_limit, self.angular_limit)
         self.enabled = True
 
     def btn_left_clicked(self):
-        self.angular = self.clamp(self.angular + 0.2, -2.0, 2.0)
+        self.angular = self.clamp(self.angular + self.angular_step, -self.angular_limit, self.angular_limit)
         self.enabled = True
 
     def ros_executer(self):
