@@ -17,7 +17,7 @@ class CmdVelArbiter(Node):
         self.patrol_enabled = True
         self.avoid_enabled = True
         self.emergency_stop = False
-        self.source_timeout_sec = 0.5
+        self.source_timeout_sec = 1.0
         self.zero_twist = Twist()
 
         self.manual_msg = Twist()

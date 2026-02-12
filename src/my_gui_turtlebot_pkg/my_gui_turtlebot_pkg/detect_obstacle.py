@@ -1,5 +1,4 @@
 import math
-
 import rclpy
 from geometry_msgs.msg import Twist
 from rclpy.node import Node
@@ -7,7 +6,6 @@ from rclpy.qos import QoSProfile
 from rclpy.qos import qos_profile_sensor_data
 from sensor_msgs.msg import LaserScan
 from std_srvs.srv import SetBool
-
 
 class DetectObstacle(Node):
     def __init__(self):
@@ -67,7 +65,7 @@ class DetectObstacle(Node):
         obstacle_distance = min(left_min, right_min)
 
         if obstacle_distance < self.stop_distance:
-            # If left side is more open, turn left. Otherwise turn right.
+            # left_min > right_min 이면 왼쪽 공간이 더 넓으므로 좌회전
             turn_direction = 1.0 if left_min > right_min else -1.0
             twist.angular.z = turn_direction * self.turn_speed
 

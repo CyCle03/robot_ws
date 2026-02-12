@@ -64,18 +64,19 @@ class PatrolActionServer(Node):
         return math.atan2(siny, cosy)
 
     def go_front(self, goal_handle, position, length):
+        step_dt = 0.1
         while True:
             if goal_handle.is_cancel_requested:
                 self.init_twist()
                 return False
-            position += self.twist.linear.x
             if position >= length:
                 break
             self.twist.linear.x = self.linear_x
             self.twist.angular.z = 0.0
             self.cmd_vel_pub.publish(self.twist)
 
-            time.sleep(1)
+            time.sleep(step_dt)
+            position += abs(self.linear_x) * step_dt
         self.init_twist()
         return True
 
