@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 ################################################################################
-## Form generated from reading UI file 'turtle_move.ui'
+## Form generated from reading UI file 'turtlebot_move.ui'
 ##
 ## Created by: Qt User Interface Compiler version 6.10.2
 ##
@@ -31,19 +31,28 @@ class Ui_MainWindow(object):
         self.listWidget.setGeometry(QRect(440, 80, 311, 411))
         self.btn_left = QPushButton(self.centralwidget)
         self.btn_left.setObjectName(u"btn_left")
-        self.btn_left.setGeometry(QRect(40, 230, 101, 81))
+        self.btn_left.setGeometry(QRect(20, 190, 101, 81))
         self.btn_go = QPushButton(self.centralwidget)
         self.btn_go.setObjectName(u"btn_go")
-        self.btn_go.setGeometry(QRect(160, 130, 101, 81))
+        self.btn_go.setGeometry(QRect(140, 90, 101, 81))
         self.btn_right = QPushButton(self.centralwidget)
         self.btn_right.setObjectName(u"btn_right")
-        self.btn_right.setGeometry(QRect(280, 230, 101, 81))
+        self.btn_right.setGeometry(QRect(260, 190, 101, 81))
         self.btn_stop = QPushButton(self.centralwidget)
         self.btn_stop.setObjectName(u"btn_stop")
-        self.btn_stop.setGeometry(QRect(160, 230, 101, 81))
+        self.btn_stop.setGeometry(QRect(140, 190, 101, 81))
         self.btn_back = QPushButton(self.centralwidget)
         self.btn_back.setObjectName(u"btn_back")
-        self.btn_back.setGeometry(QRect(160, 330, 101, 81))
+        self.btn_back.setGeometry(QRect(140, 290, 101, 81))
+        self.btn_patrol_tri = QPushButton(self.centralwidget)
+        self.btn_patrol_tri.setObjectName(u"btn_patrol_tri")
+        self.btn_patrol_tri.setGeometry(QRect(20, 430, 101, 81))
+        self.btn_patrol_sqr = QPushButton(self.centralwidget)
+        self.btn_patrol_sqr.setObjectName(u"btn_patrol_sqr")
+        self.btn_patrol_sqr.setGeometry(QRect(140, 430, 101, 81))
+        self.btn_patrol_stop = QPushButton(self.centralwidget)
+        self.btn_patrol_stop.setObjectName(u"btn_patrol_stop")
+        self.btn_patrol_stop.setGeometry(QRect(260, 430, 101, 81))
         MainWindow.setCentralWidget(self.centralwidget)
         self.menubar = QMenuBar(MainWindow)
         self.menubar.setObjectName(u"menubar")
@@ -65,5 +74,8 @@ class Ui_MainWindow(object):
         self.btn_right.setText(QCoreApplication.translate("MainWindow", u"Right", None))
         self.btn_stop.setText(QCoreApplication.translate("MainWindow", u"Stop", None))
         self.btn_back.setText(QCoreApplication.translate("MainWindow", u"Back", None))
+        self.btn_patrol_tri.setText(QCoreApplication.translate("MainWindow", u"patrol(tri)", None))
+        self.btn_patrol_sqr.setText(QCoreApplication.translate("MainWindow", u"patrol(sqr)", None))
+        self.btn_patrol_stop.setText(QCoreApplication.translate("MainWindow", u"patrol stop", None))
     # retranslateUi
 

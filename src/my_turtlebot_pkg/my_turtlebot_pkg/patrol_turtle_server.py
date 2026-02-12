@@ -1,5 +1,4 @@
 import math
-import threading
 import time
 
 from geometry_msgs.msg import Point
@@ -128,7 +127,6 @@ class Turtlebot3PatrolServer(Node):
 
         self.init_twist()
         self.get_logger().info('Patrol complete.')
-        threading.Timer(0.1, rclpy.shutdown).start()
 
         return result
 

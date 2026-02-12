@@ -1,12 +1,12 @@
 import sys
 import rclpy
 from PySide6.QtWidgets import QApplication, QMainWindow
-from .turtle_move_ui import Ui_MainWindow
+from .turtlebot_move_ui import Ui_MainWindow
 from .move_turtlebot_pub import Move_turtle
+from .patrol_action_client import PatrolActionClient
 from geometry_msgs.msg import Twist
 from PySide6.QtCore import QThread, Signal, Slot
 from rclpy.executors import MultiThreadedExecutor
-
 
 class RclpyThread(QThread):
     def __init__(self, executor):
@@ -18,7 +18,6 @@ class RclpyThread(QThread):
             self.executor.spin()
         finally:
             rclpy.shutdown()
-
 
 class MainWindow(QMainWindow):
     log_signal = Signal(str)
@@ -34,14 +33,18 @@ class MainWindow(QMainWindow):
         self.ui.btn_right.clicked.connect(self.btn_right_clicked)
         self.ui.btn_left.clicked.connect(self.btn_left_clicked)
         self.ui.btn_stop.clicked.connect(self.btn_stop_clicked)
+        self.ui.btn_patrol_tri.clicked.connect(self.btn_patrol_triangle_clicked)
+        self.ui.btn_patrol_sqr.clicked.connect(self.btn_patrol_square_clicked)
+        self.ui.btn_patrol_stop.clicked.connect(self.btn_patrol_stop_clicked)
         self.log_signal.connect(self.append_log_line)
-
 
         #self.worker = QThread(targer=)
         rclpy.init()
         self.executor = MultiThreadedExecutor()
         self.rclpy_thread = RclpyThread(self.executor)
         self.pub_move = Move_turtle()
+        self.action_client = PatrolActionClient()
+        self.executor.add_node(self.action_client)
         # cmd_vel을 기존 1에서 0.1(10hz)초 마다 명령을 보내도록 수정
         self.pub_move.timer = self.pub_move.create_timer(0.1, self.turtle_move)
         self.velocity = 0.0
@@ -103,6 +106,18 @@ class MainWindow(QMainWindow):
         self.angular = self.clamp(self.angular + self.angular_step, -self.angular_limit, self.angular_limit)
         self.enabled = True
 
+    def btn_patrol_square_clicked(self):
+        # mode=1(square), 거리=1.0m, 반복=1회
+        self.action_client.send_goal(1, 1.0, 1)
+
+    def btn_patrol_triangle_clicked(self):
+        # mode=2(triangle), 거리=1.0m, 반복=1회
+        self.action_client.send_goal(2, 1.0, 1)
+
+    def btn_patrol_stop_clicked(self):
+        self.action_client.cancel_goal()
+        self.btn_stop_clicked()
+
     def ros_executer(self):
         self.executor.spin()
 
@@ -111,6 +126,8 @@ class MainWindow(QMainWindow):
         self.executor.shutdown()
         self.rclpy_thread.quit()
         self.rclpy_thread.wait()
+        self.action_client.destroy_node()
+        self.pub_move.destroy_node()
         super().closeEvent(event)
 
 
