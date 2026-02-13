@@ -2,6 +2,7 @@
 
 ## 1. 목적
 - GUI 수동 제어, Patrol Action 제어, 장애물 회피 제어를 통합하고 최종 `/cmd_vel` 출력을 단일 노드에서 중재한다.
+- Mapper/Frontier 탐색 기능은 `my_mapper_turtlebot_pkg`로 분리했다.
 
 ## 2. 아키텍처 개요
 - 수동 제어 노드: `turtlebot_move_con.py` + `move_turtlebot_pub.py`
@@ -10,9 +11,6 @@
 - 장애물 회피: `detect_obstacle.py`
 - 속도 중재기: `cmd_vel_arbiter.py`
 - 통합 실행 launch: `launch/gui_turtlebot_system.launch.py`
-- Frontier 탐색 노드: `mapper_explorer.py`
-- Frontier 단독 실행 launch: `launch/mapper_explorer.launch.py`
-- RViz 설정 파일: `rviz/explorer.rviz`
 
 ## 3. 토픽 명세
 - 입력 토픽(중재기 기준):
@@ -85,88 +83,13 @@
 - `action_msgs`
 - `geometry_msgs`
 - `nav_msgs`
-- `nav2_msgs`
 - `sensor_msgs`
 - `std_srvs`
 - `turtlebot3_msgs`
 - `launch`, `launch_ros`
 
-## 10. Frontier 탐색(MapperExplorer) 명세
-- 파일: `my_gui_turtlebot_pkg/mapper_explorer.py`
-- 입력:
-  - `/map` (`nav_msgs/msg/OccupancyGrid`, `TRANSIENT_LOCAL`)
-  - `/odom` (`nav_msgs/msg/Odometry`)
-- 출력:
-  - `NavigateToPose` goal 전송(`/navigate_to_pose`)
-- 상태 머신:
-  - `IDLE -> SELECT_GOAL -> NAVIGATING -> EVALUATE -> (반복 또는 DONE)`
-- 탐색 단계:
-  - `RICH`: `rich_min_density` 이상 frontier만 허용(현재 기본값 `0.0`으로 사실상 전체 허용)
-  - `COVERAGE`: 남은 frontier 커버리지 탐색
-
-## 11. Frontier 선택/예외 처리 정책
-- Frontier 추출:
-  - `free(0)` 셀 중 주변 8-neighbor에 `unknown(-1)`이 존재하는 셀을 후보로 추출
-  - BFS 클러스터링 후 클러스터 중심점을 goal 후보로 사용
-  - 실제 nav goal은 frontier 중심에서 로봇 방향으로 오프셋한 free 셀을 사용
-- 선택 필터:
-  - 로봇과 너무 가까운 goal 제외(기본): `distance < 0.75m`
-  - 현재 위치에서 free-space 연결 경로가 없는 goal 제외(4-neighbor BFS reachability)
-  - 장애물 과밀 goal 제외: `obstacle_density(goal 기준, radius=4) > 0.30`
-  - blacklist 근접 goal 제외: `distance_to_blacklist <= 0.60m`
-  - hard blacklist 근접 goal 제외: `distance_to_hard_blacklist <= 0.60m`
-  - 맵 경계 근접 goal 제외: `map_margin_cells = 2` (맵 외곽 2셀 이내 제외)
-  - goal 주변 장애물 클리어런스 부족 제외: `min_clearance_radius_cells = 1`
-  - 최근 전송 goal 근접 후보 감점: `recent_goal_radius = 0.75m`, `recent_goal_penalty = 1.3`, 최근 이력 `8개`
-  - fallback ladder:
-    - 1차(`base`): 기본 필터
-    - 2차(`loose_clearance`): `min_clearance_radius_cells = 1`, `min_goal_distance = 0.60`
-    - 3차(`loose_obstacle`): `min_clearance_radius_cells = 1`, `max_obstacle_density = 0.35`, `min_goal_distance = 0.50`
-    - 4차(`loose_blacklist`): 위 조건 + `hard_blacklist_radius = 0.50`, `min_goal_distance = 0.45`
-    - 5차(`rescue`): `min_clearance_radius_cells = 0`, `max_obstacle_density = 0.55`, `hard_blacklist_radius = 0.35`, `min_goal_distance = 0.30`
-    - `no_goal` 상태가 오래 지속되면(`12s`) hard blacklist를 만료하고 `ttl_rescue`로 재시도:
-      - `max_obstacle_density = 0.60`, `min_clearance_radius_cells = 0`, `blacklist_radius = 0.0`, `hard_blacklist_radius = 0.0`, `min_goal_distance = 0.25`
-  - blacklist 포화 복구:
-    - `Goal selection failed` 통계에서 `blk >= total`이면 soft/hard blacklist를 즉시 초기화하고 rescue 조건으로 재선택
-- 점수식:
-  - `score = w_info*info + w_dist*min(distance, distance_reward_cap_m) - w_obs*obs - w_visit*visited_penalty`
-  - 거리 보상은 상한(`distance_reward_cap_m = 2.5`)을 두어 너무 먼 goal만 과도 선호하지 않도록 제한
-  - 기본 가중치(빠른 스캔 우선): `w_dist=1.0`, `w_obs=0.6`, `w_info=1.8`, `w_visit=0.8`
-  - `COVERAGE` 단계에서는 장애물 페널티를 추가 완화(`w_obs * 0.4`)
-  - 후보가 선택되지 않으면 탈락 통계를 로그로 출력:
-    - `Goal selection failed [attempt] total/offset/obs/near/blk/hblk/margin`
-- 타임아웃/재시도:
-  - goal timeout: `60s`
-  - timeout/거절/실패 goal은 hard blacklist에도 즉시 반영
-  - goal 재시도 제한: `max_goal_retries = 1` (실패 2회차부터 soft blacklist, 3회차부터 hard blacklist)
-  - hard blacklist TTL: `20s`
-  - soft blacklist TTL: `30s`
-  - Nav2의 false-positive success 방지:
-    - 성공 응답이어도 `(planned >= 0.35m)` 이면서 `(moved < 0.20m 그리고 remaining > 0.20m)`이면 실패로 처리
-  - 진행 정체 복구:
-    - `12s` 동안 의미 있는 이동(`>= 0.20m`)이 없고 active goal이 있으면 goal을 취소(`stalled_progress`)하고 해당 goal을 blacklist/hard blacklist에 추가
-    - active goal이 없는데 정체가 지속되면 soft/hard blacklist를 초기화하고 재탐색
-
-## 12. 장애물 회피(DetectObstacle) 정책
-- 파일: `my_gui_turtlebot_pkg/detect_obstacle.py`
-- 입력:
-  - `scan` (`sensor_msgs/msg/LaserScan`)
-- 출력:
-  - `cmd_vel_avoid` (`geometry_msgs/msg/Twist`)
-- 동작:
-  - 기본은 `Twist(0,0)` 유지
-  - 전방 좌/우 최소 거리 중 작은 값을 `obstacle_distance`로 사용
-  - `obstacle_distance < stop_distance(0.45m)`이면 recovery 진입
-  - Recovery 1단계(후진): `0.25s`, `linear.x = -0.08`
-  - Recovery 2단계(회전): `최대 0.5s`, `angular.z = ±0.7`
-  - 회전 방향: 좌/우 여유공간 비교(`front_left_min > front_right_min`이면 좌회전)
-  - `obstacle_distance > clear_distance(0.58m)`가 되면 recovery 종료
-
-## 13. 매핑 실행 시 주의사항
-- SLAM은 하나만 실행해야 함 (`slam_toolbox`와 `cartographer` 동시 실행 금지)
-- `mapper_explorer.launch.py`는 탐색 노드만 실행하므로 아래 스택이 별도로 선행되어야 함:
-  - Gazebo/Robot bringup (`/odom`, TF)
-  - SLAM (`/map`)
-  - Nav2 (`/navigate_to_pose`)
-- `stress_maze_world.launch.py` 기본 스폰 위치:
-  - `x_pose=-3.20`, `y_pose=-3.20`
+## 10. 분리된 Mapper 기능
+- Mapper/Frontier 관련 실행은 `my_mapper_turtlebot_pkg`에서 제공한다.
+- 예시:
+  - `ros2 launch my_mapper_turtlebot_pkg mapper_explorer.launch.py`
+  - `ros2 launch my_mapper_turtlebot_pkg stress_maze_explorer.launch.py`

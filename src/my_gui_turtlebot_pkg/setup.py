@@ -33,7 +33,6 @@ setup(
             'patrol_action_server = my_gui_turtlebot_pkg.patrol_action_server:main',
             'detect_obstacle = my_gui_turtlebot_pkg.detect_obstacle:main',
             'cmd_vel_arbiter = my_gui_turtlebot_pkg.cmd_vel_arbiter:main',
-            'mapper_explorer = my_gui_turtlebot_pkg.mapper_explorer:main',
         ],
     },
 )
