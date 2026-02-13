@@ -124,7 +124,9 @@
     - 4차(`loose_blacklist`): 위 조건 + `hard_blacklist_radius = 0.50`, `min_goal_distance = 0.45`
     - 5차(`rescue`): `min_clearance_radius_cells = 0`, `max_obstacle_density = 0.55`, `hard_blacklist_radius = 0.35`, `min_goal_distance = 0.30`
     - `no_goal` 상태가 오래 지속되면(`12s`) hard blacklist를 만료하고 `ttl_rescue`로 재시도:
-      - `max_obstacle_density = 0.60`, `min_clearance_radius_cells = 0`, `hard_blacklist_radius = 0.0`, `min_goal_distance = 0.25`
+      - `max_obstacle_density = 0.60`, `min_clearance_radius_cells = 0`, `blacklist_radius = 0.0`, `hard_blacklist_radius = 0.0`, `min_goal_distance = 0.25`
+  - blacklist 포화 복구:
+    - `Goal selection failed` 통계에서 `blk >= total`이면 soft/hard blacklist를 즉시 초기화하고 rescue 조건으로 재선택
 - 점수식:
   - `score = w_info*info + w_dist*min(distance, distance_reward_cap_m) - w_obs*obs - w_visit*visited_penalty`
   - 거리 보상은 상한(`distance_reward_cap_m = 2.5`)을 두어 너무 먼 goal만 과도 선호하지 않도록 제한
@@ -137,8 +139,11 @@
   - timeout/거절/실패 goal은 hard blacklist에도 즉시 반영
   - goal 재시도 제한: `max_goal_retries = 0` (실패 1회 시 즉시 blacklist)
   - hard blacklist TTL: `20s`
+  - soft blacklist TTL: `30s`
   - Nav2의 false-positive success 방지:
     - 성공 응답이어도 `(planned >= 0.35m)` 이면서 `(moved < 0.20m 또는 remaining > 0.20m)`이면 실패로 처리
+  - 진행 정체 복구:
+    - `20s` 동안 의미 있는 이동(`>= 0.20m`)이 없으면 soft/hard blacklist를 초기화하고 재탐색
 
 ## 12. 장애물 회피(DetectObstacle) 정책
 - 파일: `my_gui_turtlebot_pkg/detect_obstacle.py`
