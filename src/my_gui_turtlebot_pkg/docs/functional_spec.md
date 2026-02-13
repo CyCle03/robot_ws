@@ -117,13 +117,21 @@
   - hard blacklist 근접 goal 제외: `distance_to_hard_blacklist <= 1.00m`
   - 맵 경계 근접 goal 제외: `map_margin_cells = 2` (맵 외곽 2셀 이내 제외)
   - goal 주변 장애물 클리어런스 부족 제외: `min_clearance_radius_cells = 2`
+  - fallback ladder:
+    - 1차: 기본 필터
+    - 2차: `min_clearance_radius_cells = 1`
+    - 3차: `min_clearance_radius_cells = 1`, `max_obstacle_density = 0.35`
+    - 4차: 위 조건 + `hard_blacklist_radius = 0.50`
 - 점수식:
   - `score = w_info*info - w_dist*distance - w_obs*obs - w_visit*visited_penalty`
   - 기본 가중치(빠른 스캔 우선): `w_dist=0.7`, `w_obs=0.6`, `w_info=1.8`, `w_visit=0.8`
+  - `COVERAGE` 단계에서는 장애물 페널티를 추가 완화(`w_obs * 0.4`)
 - 타임아웃/재시도:
   - goal timeout: `120s`
   - timeout/거절/실패 goal은 hard blacklist에도 즉시 반영
   - goal 재시도 제한: `max_goal_retries = 0` (실패 1회 시 즉시 blacklist)
+  - hard blacklist TTL: `20s`
+  - `no_goal` 상태가 `12s` 이상 지속되면 hard blacklist 만료 처리 후 재선택
 
 ## 12. 장애물 회피(DetectObstacle) 정책
 - 파일: `my_gui_turtlebot_pkg/detect_obstacle.py`

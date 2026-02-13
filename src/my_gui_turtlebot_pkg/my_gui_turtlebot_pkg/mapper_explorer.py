@@ -51,10 +51,12 @@ class MapperExplorer(Node):
         self.current_goal = None
         self.blacklist = set()
         self.hard_blacklist = set()
+        self.hard_blacklist_time = {}
         self.visited_count = {}
         self.goal_fail_count = {}
         self.last_result = None
         self.last_status = None
+        self.last_goal_selected_time_sec = None
 
         self.rich_min_density = 0.0
         self.goal_timeout_sec = 120.0
@@ -70,6 +72,8 @@ class MapperExplorer(Node):
         self.hard_blacklist_radius = 1.00
         self.map_margin_cells = 2
         self.min_clearance_radius_cells = 2
+        self.hard_blacklist_ttl_sec = 20.0
+        self.no_goal_relax_after_sec = 12.0
 
         self.nav_client = ActionClient(self, NavigateToPose, '/navigate_to_pose')
         self.create_subscription(OccupancyGrid, '/map', self.map_callback, map_qos)
@@ -92,6 +96,7 @@ class MapperExplorer(Node):
     def step(self):
         if self.map_msg is None or self.robot_x is None:
             return
+        self._prune_hard_blacklist()
 
         if self.state == ExplorerState.IDLE:
             self.state = ExplorerState.SELECT_GOAL
@@ -109,7 +114,7 @@ class MapperExplorer(Node):
                 self.get_logger().info('No frontiers left. Exploration done.')
                 return
 
-            goal = self.select_goal(frontiers)
+            goal = self.select_goal_with_fallback(frontiers)
             if goal is None:
                 if self.phase == Phase.RICH:
                     self.phase = Phase.COVERAGE
@@ -120,6 +125,7 @@ class MapperExplorer(Node):
 
             self.send_nav_goal(goal)
             self.current_goal = goal
+            self.last_goal_selected_time_sec = self._now_sec()
             self.state = ExplorerState.NAVIGATING
             return
 
@@ -135,7 +141,7 @@ class MapperExplorer(Node):
                         if self.current_goal is not None:
                             key = (round(self.current_goal[0], 2), round(self.current_goal[1], 2))
                             self.blacklist.add(key)
-                            self.hard_blacklist.add(key)
+                            self._add_hard_blacklist(key)
                         self.goal_active = False
                         self.last_status = GoalStatus.STATUS_ABORTED
                         self.state = ExplorerState.EVALUATE
@@ -155,7 +161,7 @@ class MapperExplorer(Node):
                     self.goal_fail_count[key] = fail
                     if fail > self.max_goal_retries:
                         self.blacklist.add(key)
-                        self.hard_blacklist.add(key)
+                        self._add_hard_blacklist(key)
 
             self.current_goal = None
             self.last_result = None
@@ -169,27 +175,83 @@ class MapperExplorer(Node):
         return extract_frontiers(map_msg, self.frontier_min_cluster_size)
 
     def select_goal(self, frontiers):
+        return self._select_goal(frontiers)
+
+    def _active_hard_blacklist(self):
+        now = self._now_sec()
+        return {
+            key for key, ts in self.hard_blacklist_time.items()
+            if (now - ts) <= self.hard_blacklist_ttl_sec
+        }
+
+    def _prune_hard_blacklist(self):
+        active = self._active_hard_blacklist()
+        self.hard_blacklist = active
+        self.hard_blacklist_time = {k: self.hard_blacklist_time[k] for k in active}
+
+    def _add_hard_blacklist(self, key):
+        self.hard_blacklist.add(key)
+        self.hard_blacklist_time[key] = self._now_sec()
+
+    def _select_goal(
+        self,
+        frontiers,
+        *,
+        max_obstacle_density=None,
+        min_clearance_radius_cells=None,
+        hard_blacklist_radius=None,
+    ):
+        w_obs = self.w_obs if self.phase == Phase.RICH else self.w_obs * 0.4
         return select_goal(
             frontiers=frontiers,
             map_msg=self.map_msg,
             robot_x=self.robot_x,
             robot_y=self.robot_y,
             blacklist=self.blacklist,
-            hard_blacklist=self.hard_blacklist,
+            hard_blacklist=self._active_hard_blacklist(),
             visited_count=self.visited_count,
             phase=self.phase.name,
             rich_min_density=self.rich_min_density,
             w_dist=self.w_dist,
-            w_obs=self.w_obs,
+            w_obs=w_obs,
             w_info=self.w_info,
             w_visit=self.w_visit,
             min_goal_distance=self.min_goal_distance,
-            max_obstacle_density=self.max_obstacle_density,
+            max_obstacle_density=max_obstacle_density
+            if max_obstacle_density is not None else self.max_obstacle_density,
             blacklist_radius=self.blacklist_radius,
-            hard_blacklist_radius=self.hard_blacklist_radius,
+            hard_blacklist_radius=hard_blacklist_radius
+            if hard_blacklist_radius is not None else self.hard_blacklist_radius,
             map_margin_cells=self.map_margin_cells,
-            min_clearance_radius_cells=self.min_clearance_radius_cells,
+            min_clearance_radius_cells=min_clearance_radius_cells
+            if min_clearance_radius_cells is not None else self.min_clearance_radius_cells,
         )
+
+    def select_goal_with_fallback(self, frontiers):
+        attempts = [
+            {},
+            {'min_clearance_radius_cells': 1},
+            {'min_clearance_radius_cells': 1, 'max_obstacle_density': 0.35},
+            {
+                'min_clearance_radius_cells': 1,
+                'max_obstacle_density': 0.35,
+                'hard_blacklist_radius': 0.50,
+            },
+        ]
+        for params in attempts:
+            goal = self._select_goal(frontiers, **params)
+            if goal is not None:
+                return goal
+
+        if self.last_goal_selected_time_sec is not None:
+            if (self._now_sec() - self.last_goal_selected_time_sec) > self.no_goal_relax_after_sec:
+                self.get_logger().warning(
+                    'No selectable goal for a while. Expire hard blacklist entries.'
+                )
+                self.hard_blacklist.clear()
+                self.hard_blacklist_time.clear()
+                return self._select_goal(frontiers, max_obstacle_density=0.35, min_clearance_radius_cells=1)
+        return None
 
     def send_nav_goal(self, goal_xy):
         if not self.nav_client.wait_for_server(timeout_sec=1.0):
@@ -231,7 +293,7 @@ class MapperExplorer(Node):
             if self.current_goal is not None:
                 key = (round(self.current_goal[0], 2), round(self.current_goal[1], 2))
                 self.blacklist.add(key)
-                self.hard_blacklist.add(key)
+                self._add_hard_blacklist(key)
             self.goal_active = False
             self.goal_handle = None
             self.last_status = GoalStatus.STATUS_ABORTED
@@ -282,7 +344,7 @@ class MapperExplorer(Node):
             if reason == 'timeout' and self.current_goal is not None:
                 key = (round(self.current_goal[0], 2), round(self.current_goal[1], 2))
                 self.blacklist.add(key)
-                self.hard_blacklist.add(key)
+                self._add_hard_blacklist(key)
         else:
             self.get_logger().warning(f'Goal cancel rejected ({reason}).')
             self.last_status = GoalStatus.STATUS_ABORTED
