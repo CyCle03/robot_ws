@@ -108,6 +108,14 @@ class MapperExplorer(Node):
                 return
 
             goal = self.select_goal(frontiers)
+            if goal is None and self.blacklist:
+                # If all candidates are blocked by blacklist after recent failures,
+                # reset once and retry selection to avoid long idle stalls.
+                self.get_logger().warning(
+                    'No selectable goal (likely blacklisted). Clear blacklist and retry.'
+                )
+                self.blacklist.clear()
+                goal = self.select_goal(frontiers)
             if goal is None:
                 if self.phase == Phase.RICH:
                     self.phase = Phase.COVERAGE

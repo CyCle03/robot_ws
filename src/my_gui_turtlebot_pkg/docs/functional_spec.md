@@ -122,6 +122,7 @@
   - goal timeout: `120s`
   - timeout 취소 발생 시 해당 goal 즉시 blacklist
   - goal 재시도 제한: `max_goal_retries = 0` (실패 1회 시 즉시 blacklist)
+  - 모든 후보가 blacklist로 막혀 goal 선택 실패 시, blacklist를 1회 초기화 후 재선택 시도
 
 ## 12. 장애물 회피(DetectObstacle) 정책
 - 파일: `my_gui_turtlebot_pkg/detect_obstacle.py`
