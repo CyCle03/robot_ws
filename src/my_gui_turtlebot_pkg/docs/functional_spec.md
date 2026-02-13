@@ -167,4 +167,4 @@
   - SLAM (`/map`)
   - Nav2 (`/navigate_to_pose`)
 - `stress_maze_world.launch.py` 기본 스폰 위치:
-  - `x_pose=-1.60`, `y_pose=-1.60`
+  - `x_pose=-2.40`, `y_pose=-2.40`
