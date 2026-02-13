@@ -256,6 +256,9 @@ def select_goal(
     max_obstacle_density=0.45,
     blacklist_radius=0.0,
     hard_blacklist_radius=0.0,
+    recent_goals=None,
+    recent_goal_radius=0.0,
+    recent_goal_penalty=0.0,
     map_margin_cells=0,
     min_clearance_radius_cells=0,
     obstacle_radius_cells=4,
@@ -274,6 +277,7 @@ def select_goal(
         rejection_stats['too_near'] = 0
         rejection_stats['obstacle_density'] = 0
         rejection_stats['rich_min_density'] = 0
+        rejection_stats['recent_penalized'] = 0
         rejection_stats['selected'] = 0
 
     best = None
@@ -313,7 +317,7 @@ def select_goal(
                 if rejection_stats is not None:
                     rejection_stats['hard_blacklist_radius'] += 1
                 continue
-        if not is_within_map_margin(map_msg, fx, fy, map_margin_cells):
+        if not is_within_map_margin(map_msg, gx, gy, map_margin_cells):
             if rejection_stats is not None:
                 rejection_stats['map_margin'] += 1
             continue
@@ -343,6 +347,15 @@ def select_goal(
         v = visited_count.get(key, 0)
         distance_reward = min(d, distance_reward_cap_m)
         score = w_info * info + w_dist * distance_reward - w_obs * obs - w_visit * v
+        if recent_goals and recent_goal_radius > 0.0 and recent_goal_penalty > 0.0:
+            recent_hits = sum(
+                1 for rx, ry in recent_goals
+                if math.hypot(gx - rx, gy - ry) <= recent_goal_radius
+            )
+            if recent_hits > 0:
+                score -= recent_goal_penalty * recent_hits
+                if rejection_stats is not None:
+                    rejection_stats['recent_penalized'] += 1
 
         if phase == 'RICH' and obs < rich_min_density:
             if rejection_stats is not None:

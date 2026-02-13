@@ -112,11 +112,12 @@
 - 선택 필터:
   - 로봇과 너무 가까운 goal 제외(기본): `distance < 0.75m`
   - 현재 위치에서 free-space 연결 경로가 없는 goal 제외(4-neighbor BFS reachability)
-  - 장애물 과밀 goal 제외: `obstacle_density(goal 기준, radius=4) > 0.25`
-  - blacklist 근접 goal 제외: `distance_to_blacklist <= 0.80m`
-  - hard blacklist 근접 goal 제외: `distance_to_hard_blacklist <= 1.00m`
+  - 장애물 과밀 goal 제외: `obstacle_density(goal 기준, radius=4) > 0.30`
+  - blacklist 근접 goal 제외: `distance_to_blacklist <= 0.60m`
+  - hard blacklist 근접 goal 제외: `distance_to_hard_blacklist <= 0.60m`
   - 맵 경계 근접 goal 제외: `map_margin_cells = 2` (맵 외곽 2셀 이내 제외)
-  - goal 주변 장애물 클리어런스 부족 제외: `min_clearance_radius_cells = 2`
+  - goal 주변 장애물 클리어런스 부족 제외: `min_clearance_radius_cells = 1`
+  - 최근 전송 goal 근접 후보 감점: `recent_goal_radius = 0.75m`, `recent_goal_penalty = 1.3`, 최근 이력 `8개`
   - fallback ladder:
     - 1차(`base`): 기본 필터
     - 2차(`loose_clearance`): `min_clearance_radius_cells = 1`, `min_goal_distance = 0.60`
@@ -135,15 +136,16 @@
   - 후보가 선택되지 않으면 탈락 통계를 로그로 출력:
     - `Goal selection failed [attempt] total/offset/obs/near/blk/hblk/margin`
 - 타임아웃/재시도:
-  - goal timeout: `120s`
+  - goal timeout: `60s`
   - timeout/거절/실패 goal은 hard blacklist에도 즉시 반영
-  - goal 재시도 제한: `max_goal_retries = 0` (실패 1회 시 즉시 blacklist)
+  - goal 재시도 제한: `max_goal_retries = 1` (실패 2회차부터 soft blacklist, 3회차부터 hard blacklist)
   - hard blacklist TTL: `20s`
   - soft blacklist TTL: `30s`
   - Nav2의 false-positive success 방지:
-    - 성공 응답이어도 `(planned >= 0.35m)` 이면서 `(moved < 0.20m 또는 remaining > 0.20m)`이면 실패로 처리
+    - 성공 응답이어도 `(planned >= 0.35m)` 이면서 `(moved < 0.20m 그리고 remaining > 0.20m)`이면 실패로 처리
   - 진행 정체 복구:
-    - `20s` 동안 의미 있는 이동(`>= 0.20m`)이 없으면 soft/hard blacklist를 초기화하고 재탐색
+    - `12s` 동안 의미 있는 이동(`>= 0.20m`)이 없고 active goal이 있으면 goal을 취소(`stalled_progress`)하고 해당 goal을 blacklist/hard blacklist에 추가
+    - active goal이 없는데 정체가 지속되면 soft/hard blacklist를 초기화하고 재탐색
 
 ## 12. 장애물 회피(DetectObstacle) 정책
 - 파일: `my_gui_turtlebot_pkg/detect_obstacle.py`
