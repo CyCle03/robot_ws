@@ -12,6 +12,7 @@ setup(
         ('share/' + package_name, ['package.xml']),
         ('share/' + package_name + '/launch', glob('launch/*.py')),
         ('share/' + package_name + '/docs', glob('docs/*.md')),
+        ('share/' + package_name + '/config', glob('config/*')),
         ('share/' + package_name + '/maps', glob('maps/*')),
         ('share/' + package_name + '/rviz', glob('rviz/*.rviz')),
         ('share/' + package_name + '/worlds', glob('worlds/*')),

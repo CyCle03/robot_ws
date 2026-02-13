@@ -11,7 +11,7 @@ from launch_ros.actions import Node
 def generate_launch_description():
     my_pkg_share = get_package_share_directory('my_mapper_turtlebot_pkg')
     nav2_share = get_package_share_directory('nav2_bringup')
-    nav2_params = os.path.join(nav2_share, 'params', 'nav2_params.yaml')
+    nav2_params = os.path.join(my_pkg_share, 'config', 'nav2_params_stress_maze.yaml')
 
     world_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
