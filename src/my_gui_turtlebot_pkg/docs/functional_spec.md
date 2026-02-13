@@ -108,11 +108,13 @@
 - Frontier 추출:
   - `free(0)` 셀 중 주변 8-neighbor에 `unknown(-1)`이 존재하는 셀을 후보로 추출
   - BFS 클러스터링 후 클러스터 중심점을 goal 후보로 사용
+  - 실제 nav goal은 frontier 중심에서 로봇 방향으로 오프셋한 free 셀을 사용
 - 선택 필터:
   - 로봇과 너무 가까운 goal 제외: `distance < 0.45m`
   - 현재 위치에서 free-space 연결 경로가 없는 goal 제외(4-neighbor BFS reachability)
   - 장애물 과밀 goal 제외: `obstacle_density > 0.25`
   - blacklist 근접 goal 제외: `distance_to_blacklist <= 0.80m`
+  - hard blacklist 근접 goal 제외: `distance_to_hard_blacklist <= 1.00m`
   - 맵 경계 근접 goal 제외: `map_margin_cells = 2` (맵 외곽 2셀 이내 제외)
   - goal 주변 장애물 클리어런스 부족 제외: `min_clearance_radius_cells = 2`
 - 점수식:
@@ -120,9 +122,8 @@
   - 기본 가중치(빠른 스캔 우선): `w_dist=0.7`, `w_obs=0.6`, `w_info=1.8`, `w_visit=0.8`
 - 타임아웃/재시도:
   - goal timeout: `120s`
-  - timeout 취소 발생 시 해당 goal 즉시 blacklist
+  - timeout/거절/실패 goal은 hard blacklist에도 즉시 반영
   - goal 재시도 제한: `max_goal_retries = 0` (실패 1회 시 즉시 blacklist)
-  - 모든 후보가 blacklist로 막혀 goal 선택 실패 시, blacklist를 1회 초기화 후 재선택 시도
 
 ## 12. 장애물 회피(DetectObstacle) 정책
 - 파일: `my_gui_turtlebot_pkg/detect_obstacle.py`

@@ -50,6 +50,7 @@ class MapperExplorer(Node):
         self.goal_sent_time_sec = None
         self.current_goal = None
         self.blacklist = set()
+        self.hard_blacklist = set()
         self.visited_count = {}
         self.goal_fail_count = {}
         self.last_result = None
@@ -66,6 +67,7 @@ class MapperExplorer(Node):
         self.min_goal_distance = 0.45
         self.max_obstacle_density = 0.25
         self.blacklist_radius = 0.80
+        self.hard_blacklist_radius = 1.00
         self.map_margin_cells = 2
         self.min_clearance_radius_cells = 2
 
@@ -108,14 +110,6 @@ class MapperExplorer(Node):
                 return
 
             goal = self.select_goal(frontiers)
-            if goal is None and self.blacklist:
-                # If all candidates are blocked by blacklist after recent failures,
-                # reset once and retry selection to avoid long idle stalls.
-                self.get_logger().warning(
-                    'No selectable goal (likely blacklisted). Clear blacklist and retry.'
-                )
-                self.blacklist.clear()
-                goal = self.select_goal(frontiers)
             if goal is None:
                 if self.phase == Phase.RICH:
                     self.phase = Phase.COVERAGE
@@ -141,6 +135,7 @@ class MapperExplorer(Node):
                         if self.current_goal is not None:
                             key = (round(self.current_goal[0], 2), round(self.current_goal[1], 2))
                             self.blacklist.add(key)
+                            self.hard_blacklist.add(key)
                         self.goal_active = False
                         self.last_status = GoalStatus.STATUS_ABORTED
                         self.state = ExplorerState.EVALUATE
@@ -160,6 +155,7 @@ class MapperExplorer(Node):
                     self.goal_fail_count[key] = fail
                     if fail > self.max_goal_retries:
                         self.blacklist.add(key)
+                        self.hard_blacklist.add(key)
 
             self.current_goal = None
             self.last_result = None
@@ -179,6 +175,7 @@ class MapperExplorer(Node):
             robot_x=self.robot_x,
             robot_y=self.robot_y,
             blacklist=self.blacklist,
+            hard_blacklist=self.hard_blacklist,
             visited_count=self.visited_count,
             phase=self.phase.name,
             rich_min_density=self.rich_min_density,
@@ -189,6 +186,7 @@ class MapperExplorer(Node):
             min_goal_distance=self.min_goal_distance,
             max_obstacle_density=self.max_obstacle_density,
             blacklist_radius=self.blacklist_radius,
+            hard_blacklist_radius=self.hard_blacklist_radius,
             map_margin_cells=self.map_margin_cells,
             min_clearance_radius_cells=self.min_clearance_radius_cells,
         )
@@ -231,7 +229,9 @@ class MapperExplorer(Node):
         if not goal_handle.accepted:
             self.get_logger().info('Goal rejected.')
             if self.current_goal is not None:
-                self.blacklist.add((round(self.current_goal[0], 2), round(self.current_goal[1], 2)))
+                key = (round(self.current_goal[0], 2), round(self.current_goal[1], 2))
+                self.blacklist.add(key)
+                self.hard_blacklist.add(key)
             self.goal_active = False
             self.goal_handle = None
             self.last_status = GoalStatus.STATUS_ABORTED
@@ -282,6 +282,7 @@ class MapperExplorer(Node):
             if reason == 'timeout' and self.current_goal is not None:
                 key = (round(self.current_goal[0], 2), round(self.current_goal[1], 2))
                 self.blacklist.add(key)
+                self.hard_blacklist.add(key)
         else:
             self.get_logger().warning(f'Goal cancel rejected ({reason}).')
             self.last_status = GoalStatus.STATUS_ABORTED

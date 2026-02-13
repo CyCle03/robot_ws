@@ -96,6 +96,15 @@ def has_clearance_from_obstacles(map_msg, wx, wy, radius_cells):
     return True
 
 
+def is_free_cell(map_msg, wx, wy):
+    gx, gy = world_to_grid(map_msg, wx, wy)
+    w = map_msg.info.width
+    h = map_msg.info.height
+    if gx < 0 or gx >= w or gy < 0 or gy >= h:
+        return False
+    return map_msg.data[gy * w + gx] == 0
+
+
 def compute_reachable_free_cells(map_msg, start_wx, start_wy):
     w = map_msg.info.width
     h = map_msg.info.height
@@ -123,6 +132,46 @@ def compute_reachable_free_cells(map_msg, start_wx, start_wy):
             reachable.add((nx, ny))
             queue.append((nx, ny))
     return reachable
+
+
+def offset_goal_toward_robot(
+    map_msg,
+    frontier_x,
+    frontier_y,
+    robot_x,
+    robot_y,
+    reachable,
+    map_margin_cells,
+    min_clearance_radius_cells,
+    start_offset=0.20,
+    max_offset=0.45,
+    step=0.05,
+):
+    d = math.hypot(robot_x - frontier_x, robot_y - frontier_y)
+    if d < 1e-6:
+        return None
+    ux = (robot_x - frontier_x) / d
+    uy = (robot_y - frontier_y) / d
+
+    offset = start_offset
+    while offset <= max_offset + 1e-6:
+        gx = frontier_x + ux * offset
+        gy = frontier_y + uy * offset
+        if not is_within_map_margin(map_msg, gx, gy, map_margin_cells):
+            offset += step
+            continue
+        if not is_free_cell(map_msg, gx, gy):
+            offset += step
+            continue
+        if not has_clearance_from_obstacles(map_msg, gx, gy, min_clearance_radius_cells):
+            offset += step
+            continue
+        gix, giy = world_to_grid(map_msg, gx, gy)
+        if (gix, giy) not in reachable:
+            offset += step
+            continue
+        return gx, gy
+    return None
 
 
 def extract_frontiers(map_msg, min_cluster_size):
@@ -195,6 +244,7 @@ def select_goal(
     robot_x,
     robot_y,
     blacklist,
+    hard_blacklist,
     visited_count,
     phase,
     rich_min_density,
@@ -205,6 +255,7 @@ def select_goal(
     min_goal_distance=0.35,
     max_obstacle_density=0.45,
     blacklist_radius=0.0,
+    hard_blacklist_radius=0.0,
     map_margin_cells=0,
     min_clearance_radius_cells=0,
 ):
@@ -212,30 +263,47 @@ def select_goal(
     best_score = -1e18
     reachable = compute_reachable_free_cells(map_msg, robot_x, robot_y)
     for fx, fy in frontiers:
-        key = (round(fx, 2), round(fy, 2))
+        nav_goal = offset_goal_toward_robot(
+            map_msg=map_msg,
+            frontier_x=fx,
+            frontier_y=fy,
+            robot_x=robot_x,
+            robot_y=robot_y,
+            reachable=reachable,
+            map_margin_cells=map_margin_cells,
+            min_clearance_radius_cells=min_clearance_radius_cells,
+        )
+        if nav_goal is None:
+            continue
+        gx, gy = nav_goal
+        key = (round(gx, 2), round(gy, 2))
         if key in blacklist:
             continue
+        if key in hard_blacklist:
+            continue
+        if hard_blacklist_radius > 0.0:
+            near_hard_blacklisted = any(
+                math.hypot(gx - bx, gy - by) <= hard_blacklist_radius
+                for bx, by in hard_blacklist
+            )
+            if near_hard_blacklisted:
+                continue
         if not is_within_map_margin(map_msg, fx, fy, map_margin_cells):
             continue
         if blacklist_radius > 0.0:
             near_blacklisted = any(
-                math.hypot(fx - bx, fy - by) <= blacklist_radius
+                math.hypot(gx - bx, gy - by) <= blacklist_radius
                 for bx, by in blacklist
             )
             if near_blacklisted:
                 continue
 
-        d = math.hypot(fx - robot_x, fy - robot_y)
+        d = math.hypot(gx - robot_x, gy - robot_y)
         if d < min_goal_distance:
-            continue
-        gx, gy = world_to_grid(map_msg, fx, fy)
-        if (gx, gy) not in reachable:
             continue
 
         obs = obstacle_density(map_msg, fx, fy, radius_cells=6)
         if obs > max_obstacle_density:
-            continue
-        if not has_clearance_from_obstacles(map_msg, fx, fy, min_clearance_radius_cells):
             continue
 
         info = unknown_gain(map_msg, fx, fy, radius_cells=6)
@@ -247,6 +315,6 @@ def select_goal(
 
         if score > best_score:
             best_score = score
-            best = (fx, fy)
+            best = (gx, gy)
 
     return best
