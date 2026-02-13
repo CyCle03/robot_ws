@@ -48,6 +48,7 @@ class MapperExplorer(Node):
         self.goal_active = False
         self.goal_handle = None
         self.goal_sent_time_sec = None
+        self.goal_start_pose = None
         self.current_goal = None
         self.blacklist = set()
         self.hard_blacklist = set()
@@ -74,6 +75,9 @@ class MapperExplorer(Node):
         self.min_clearance_radius_cells = 2
         self.hard_blacklist_ttl_sec = 20.0
         self.no_goal_relax_after_sec = 12.0
+        self.false_success_min_planned_m = 0.35
+        self.false_success_min_moved_m = 0.20
+        self.goal_reached_tolerance_m = 0.20
 
         self.nav_client = ActionClient(self, NavigateToPose, '/navigate_to_pose')
         self.create_subscription(OccupancyGrid, '/map', self.map_callback, map_qos)
@@ -273,6 +277,7 @@ class MapperExplorer(Node):
 
         self.goal_active = True
         self.goal_sent_time_sec = self._now_sec()
+        self.goal_start_pose = (self.robot_x, self.robot_y)
         self.get_logger().info(f'Send goal: x={gx:.2f}, y={gy:.2f}, phase={self.phase.name}')
         future = self.nav_client.send_goal_async(goal)
         future.add_done_callback(self.goal_response_callback)
@@ -319,9 +324,36 @@ class MapperExplorer(Node):
 
         self.last_result = wrapped.result
         self.last_status = wrapped.status
+        # Guard against false-positive success where nav reports success but robot
+        # either barely moved or still remains far from the goal.
+        if (
+            self.last_status == GoalStatus.STATUS_SUCCEEDED
+            and self.current_goal is not None
+            and self.goal_start_pose is not None
+            and self.robot_x is not None
+        ):
+            sx, sy = self.goal_start_pose
+            gx, gy = self.current_goal
+            planned = ((gx - sx) ** 2 + (gy - sy) ** 2) ** 0.5
+            moved = ((self.robot_x - sx) ** 2 + (self.robot_y - sy) ** 2) ** 0.5
+            remaining = ((gx - self.robot_x) ** 2 + (gy - self.robot_y) ** 2) ** 0.5
+            if (
+                planned >= self.false_success_min_planned_m
+                and (
+                    moved < self.false_success_min_moved_m
+                    or remaining > self.goal_reached_tolerance_m
+                )
+            ):
+                self.get_logger().warning(
+                    'Goal reported succeeded but considered invalid '
+                    f'(planned={planned:.2f}m, moved={moved:.2f}m, remaining={remaining:.2f}m). '
+                    'Treat as failed.'
+                )
+                self.last_status = GoalStatus.STATUS_ABORTED
         self.goal_active = False
         self.goal_handle = None
         self.goal_sent_time_sec = None
+        self.goal_start_pose = None
         self.state = ExplorerState.EVALUATE
 
     def cancel_active_goal(self, reason='manual'):
@@ -351,6 +383,7 @@ class MapperExplorer(Node):
         self.goal_active = False
         self.goal_handle = None
         self.goal_sent_time_sec = None
+        self.goal_start_pose = None
         self.state = ExplorerState.EVALUATE
 
 
