@@ -76,7 +76,7 @@ class MapperExplorer(Node):
         self.blacklist_radius = 0.60
         self.hard_blacklist_radius = 0.60
         self.recent_goal_radius = 0.75
-        self.recent_goal_penalty = 1.3
+        self.recent_goal_penalty = 1.6
         self.map_margin_cells = 2
         self.min_clearance_radius_cells = 1
         self.hard_blacklist_ttl_sec = 20.0
@@ -87,9 +87,13 @@ class MapperExplorer(Node):
         self.false_success_min_moved_m = 0.20
         self.goal_reached_tolerance_m = 0.20
         self.progress_min_distance_m = 0.20
-        self.progress_stall_reset_sec = 12.0
+        self.progress_stall_reset_sec = 30.0
+        self.post_stall_blacklist_clear_grace_sec = 35.0
+        self.post_stall_hard_blacklist_boost_sec = 45.0
+        self.post_stall_hard_blacklist_radius_boost = 0.35
         self.last_progress_pose = None
         self.last_progress_time_sec = None
+        self.last_stalled_cancel_time_sec = None
         self.blacklist_clear_cooldown_sec = 8.0
         self.last_blacklist_clear_time_sec = None
 
@@ -268,7 +272,16 @@ class MapperExplorer(Node):
                     self.get_logger().warning(
                         f'No meaningful motion for {stalled:.1f}s. Cancel current goal.'
                     )
+                    self.last_stalled_cancel_time_sec = now
+                    self.last_progress_pose = (self.robot_x, self.robot_y)
+                    self.last_progress_time_sec = now
                     self.cancel_active_goal(reason='stalled_progress')
+                    return
+                if (
+                    self.last_stalled_cancel_time_sec is not None
+                    and (now - self.last_stalled_cancel_time_sec)
+                    < self.post_stall_blacklist_clear_grace_sec
+                ):
                     return
                 cleared = self._clear_all_blacklists(
                     f'no meaningful motion for {stalled:.1f}s'
@@ -289,6 +302,19 @@ class MapperExplorer(Node):
         rejection_stats=None,
     ):
         w_obs = self.w_obs if self.phase == Phase.RICH else self.w_obs * 0.4
+        effective_hard_blacklist_radius = (
+            hard_blacklist_radius
+            if hard_blacklist_radius is not None else self.hard_blacklist_radius
+        )
+        # After stalled cancel, briefly widen hard-blacklist radius to avoid
+        # repeatedly selecting near-identical bottleneck goals.
+        if (
+            hard_blacklist_radius is None
+            and self.last_stalled_cancel_time_sec is not None
+            and (self._now_sec() - self.last_stalled_cancel_time_sec)
+            <= self.post_stall_hard_blacklist_boost_sec
+        ):
+            effective_hard_blacklist_radius += self.post_stall_hard_blacklist_radius_boost
         return select_goal(
             frontiers=frontiers,
             map_msg=self.map_msg,
@@ -309,8 +335,7 @@ class MapperExplorer(Node):
             if max_obstacle_density is not None else self.max_obstacle_density,
             blacklist_radius=blacklist_radius
             if blacklist_radius is not None else self.blacklist_radius,
-            hard_blacklist_radius=hard_blacklist_radius
-            if hard_blacklist_radius is not None else self.hard_blacklist_radius,
+            hard_blacklist_radius=effective_hard_blacklist_radius,
             recent_goals=self.recent_goals,
             recent_goal_radius=self.recent_goal_radius,
             recent_goal_penalty=self.recent_goal_penalty,
