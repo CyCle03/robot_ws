@@ -66,6 +66,8 @@ class MapperExplorer(Node):
         self.min_goal_distance = 0.45
         self.max_obstacle_density = 0.30
         self.blacklist_radius = 0.60
+        self.map_margin_cells = 4
+        self.min_clearance_radius_cells = 2
 
         self.nav_client = ActionClient(self, NavigateToPose, '/navigate_to_pose')
         self.create_subscription(OccupancyGrid, '/map', self.map_callback, map_qos)
@@ -179,6 +181,8 @@ class MapperExplorer(Node):
             min_goal_distance=self.min_goal_distance,
             max_obstacle_density=self.max_obstacle_density,
             blacklist_radius=self.blacklist_radius,
+            map_margin_cells=self.map_margin_cells,
+            min_clearance_radius_cells=self.min_clearance_radius_cells,
         )
 
     def send_nav_goal(self, goal_xy):

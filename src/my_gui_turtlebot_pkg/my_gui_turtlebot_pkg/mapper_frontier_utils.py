@@ -65,6 +65,37 @@ def unknown_gain(map_msg, wx, wy, radius_cells=6):
     return unk / total
 
 
+def is_within_map_margin(map_msg, wx, wy, margin_cells):
+    if margin_cells <= 0:
+        return True
+    gx, gy = world_to_grid(map_msg, wx, wy)
+    w = map_msg.info.width
+    h = map_msg.info.height
+    return (
+        margin_cells <= gx < (w - margin_cells)
+        and margin_cells <= gy < (h - margin_cells)
+    )
+
+
+def has_clearance_from_obstacles(map_msg, wx, wy, radius_cells):
+    if radius_cells <= 0:
+        return True
+    gx, gy = world_to_grid(map_msg, wx, wy)
+    w = map_msg.info.width
+    h = map_msg.info.height
+    data = map_msg.data
+    for dy in range(-radius_cells, radius_cells + 1):
+        for dx in range(-radius_cells, radius_cells + 1):
+            x = gx + dx
+            y = gy + dy
+            if x < 0 or x >= w or y < 0 or y >= h:
+                return False
+            v = data[y * w + x]
+            if v > 50:
+                return False
+    return True
+
+
 def extract_frontiers(map_msg, min_cluster_size):
     w = map_msg.info.width
     h = map_msg.info.height
@@ -145,12 +176,16 @@ def select_goal(
     min_goal_distance=0.35,
     max_obstacle_density=0.45,
     blacklist_radius=0.0,
+    map_margin_cells=0,
+    min_clearance_radius_cells=0,
 ):
     best = None
     best_score = -1e18
     for fx, fy in frontiers:
         key = (round(fx, 2), round(fy, 2))
         if key in blacklist:
+            continue
+        if not is_within_map_margin(map_msg, fx, fy, map_margin_cells):
             continue
         if blacklist_radius > 0.0:
             near_blacklisted = any(
@@ -166,6 +201,8 @@ def select_goal(
 
         obs = obstacle_density(map_msg, fx, fy, radius_cells=6)
         if obs > max_obstacle_density:
+            continue
+        if not has_clearance_from_obstacles(map_msg, fx, fy, min_clearance_radius_cells):
             continue
 
         info = unknown_gain(map_msg, fx, fy, radius_cells=6)
