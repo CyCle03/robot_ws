@@ -112,6 +112,8 @@
   - 로봇과 너무 가까운 goal 제외: `distance < 0.45m`
   - 장애물 과밀 goal 제외: `obstacle_density > 0.30`
   - blacklist 근접 goal 제외: `distance_to_blacklist <= 0.60m`
+  - 맵 경계 근접 goal 제외: `map_margin_cells = 4` (맵 외곽 4셀 이내 제외)
+  - goal 주변 장애물 클리어런스 부족 제외: `min_clearance_radius_cells = 2`
 - 점수식:
   - `score = w_info*info - w_dist*distance - w_obs*obs - w_visit*visited_penalty`
   - 기본 가중치: `w_dist=1.0`, `w_obs=1.2`, `w_info=1.0`, `w_visit=0.8`
