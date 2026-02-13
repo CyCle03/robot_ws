@@ -75,6 +75,7 @@ class MapperExplorer(Node):
         self.min_clearance_radius_cells = 2
         self.hard_blacklist_ttl_sec = 20.0
         self.no_goal_relax_after_sec = 12.0
+        self.obstacle_density_radius_cells = 4
         self.false_success_min_planned_m = 0.35
         self.false_success_min_moved_m = 0.20
         self.goal_reached_tolerance_m = 0.20
@@ -204,6 +205,7 @@ class MapperExplorer(Node):
         max_obstacle_density=None,
         min_clearance_radius_cells=None,
         hard_blacklist_radius=None,
+        rejection_stats=None,
     ):
         w_obs = self.w_obs if self.phase == Phase.RICH else self.w_obs * 0.4
         return select_goal(
@@ -229,23 +231,45 @@ class MapperExplorer(Node):
             map_margin_cells=self.map_margin_cells,
             min_clearance_radius_cells=min_clearance_radius_cells
             if min_clearance_radius_cells is not None else self.min_clearance_radius_cells,
+            obstacle_radius_cells=self.obstacle_density_radius_cells,
+            rejection_stats=rejection_stats,
         )
 
     def select_goal_with_fallback(self, frontiers):
         attempts = [
-            {},
-            {'min_clearance_radius_cells': 1},
-            {'min_clearance_radius_cells': 1, 'max_obstacle_density': 0.35},
+            {'name': 'base', 'params': {}},
+            {'name': 'loose_clearance', 'params': {'min_clearance_radius_cells': 1}},
             {
-                'min_clearance_radius_cells': 1,
-                'max_obstacle_density': 0.35,
-                'hard_blacklist_radius': 0.50,
+                'name': 'loose_obstacle',
+                'params': {'min_clearance_radius_cells': 1, 'max_obstacle_density': 0.35}
+            },
+            {
+                'name': 'loose_blacklist',
+                'params': {
+                    'min_clearance_radius_cells': 1,
+                    'max_obstacle_density': 0.40,
+                    'hard_blacklist_radius': 0.50,
+                }
+            },
+            {
+                'name': 'rescue',
+                'params': {
+                    'min_clearance_radius_cells': 0,
+                    'max_obstacle_density': 0.55,
+                    'hard_blacklist_radius': 0.35,
+                }
             },
         ]
-        for params in attempts:
-            goal = self._select_goal(frontiers, **params)
+        last_attempt_name = None
+        last_stats = None
+        for attempt in attempts:
+            stats = {}
+            params = attempt['params']
+            goal = self._select_goal(frontiers, rejection_stats=stats, **params)
             if goal is not None:
                 return goal
+            last_attempt_name = attempt['name']
+            last_stats = stats
 
         if self.last_goal_selected_time_sec is not None:
             if (self._now_sec() - self.last_goal_selected_time_sec) > self.no_goal_relax_after_sec:
@@ -254,8 +278,34 @@ class MapperExplorer(Node):
                 )
                 self.hard_blacklist.clear()
                 self.hard_blacklist_time.clear()
-                return self._select_goal(frontiers, max_obstacle_density=0.35, min_clearance_radius_cells=1)
+                stats = {}
+                goal = self._select_goal(
+                    frontiers,
+                    max_obstacle_density=0.60,
+                    min_clearance_radius_cells=0,
+                    hard_blacklist_radius=0.0,
+                    rejection_stats=stats,
+                )
+                if goal is None:
+                    self._log_goal_rejection_stats('ttl_rescue', stats)
+                return goal
+        if last_stats is not None:
+            self._log_goal_rejection_stats(last_attempt_name, last_stats)
         return None
+
+    def _log_goal_rejection_stats(self, attempt_name, stats):
+        if not stats:
+            return
+        self.get_logger().warning(
+            'Goal selection failed '
+            f'[{attempt_name}] total={stats.get("frontiers_total", 0)}, '
+            f'offset={stats.get("offset_invalid", 0)}, '
+            f'obs={stats.get("obstacle_density", 0)}, '
+            f'near={stats.get("too_near", 0)}, '
+            f'blk={stats.get("blacklist_exact", 0) + stats.get("blacklist_radius", 0)}, '
+            f'hblk={stats.get("hard_blacklist_exact", 0) + stats.get("hard_blacklist_radius", 0)}, '
+            f'margin={stats.get("map_margin", 0)}'
+        )
 
     def send_nav_goal(self, goal_xy):
         if not self.nav_client.wait_for_server(timeout_sec=1.0):

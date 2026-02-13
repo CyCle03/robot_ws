@@ -258,7 +258,23 @@ def select_goal(
     hard_blacklist_radius=0.0,
     map_margin_cells=0,
     min_clearance_radius_cells=0,
+    obstacle_radius_cells=4,
+    rejection_stats=None,
 ):
+    if rejection_stats is not None:
+        rejection_stats.clear()
+        rejection_stats['frontiers_total'] = len(frontiers)
+        rejection_stats['offset_invalid'] = 0
+        rejection_stats['blacklist_exact'] = 0
+        rejection_stats['hard_blacklist_exact'] = 0
+        rejection_stats['hard_blacklist_radius'] = 0
+        rejection_stats['map_margin'] = 0
+        rejection_stats['blacklist_radius'] = 0
+        rejection_stats['too_near'] = 0
+        rejection_stats['obstacle_density'] = 0
+        rejection_stats['rich_min_density'] = 0
+        rejection_stats['selected'] = 0
+
     best = None
     best_score = -1e18
     reachable = compute_reachable_free_cells(map_msg, robot_x, robot_y)
@@ -274,12 +290,18 @@ def select_goal(
             min_clearance_radius_cells=min_clearance_radius_cells,
         )
         if nav_goal is None:
+            if rejection_stats is not None:
+                rejection_stats['offset_invalid'] += 1
             continue
         gx, gy = nav_goal
         key = (round(gx, 2), round(gy, 2))
         if key in blacklist:
+            if rejection_stats is not None:
+                rejection_stats['blacklist_exact'] += 1
             continue
         if key in hard_blacklist:
+            if rejection_stats is not None:
+                rejection_stats['hard_blacklist_exact'] += 1
             continue
         if hard_blacklist_radius > 0.0:
             near_hard_blacklisted = any(
@@ -287,8 +309,12 @@ def select_goal(
                 for bx, by in hard_blacklist
             )
             if near_hard_blacklisted:
+                if rejection_stats is not None:
+                    rejection_stats['hard_blacklist_radius'] += 1
                 continue
         if not is_within_map_margin(map_msg, fx, fy, map_margin_cells):
+            if rejection_stats is not None:
+                rejection_stats['map_margin'] += 1
             continue
         if blacklist_radius > 0.0:
             near_blacklisted = any(
@@ -296,25 +322,35 @@ def select_goal(
                 for bx, by in blacklist
             )
             if near_blacklisted:
+                if rejection_stats is not None:
+                    rejection_stats['blacklist_radius'] += 1
                 continue
 
         d = math.hypot(gx - robot_x, gy - robot_y)
         if d < min_goal_distance:
+            if rejection_stats is not None:
+                rejection_stats['too_near'] += 1
             continue
 
-        obs = obstacle_density(map_msg, fx, fy, radius_cells=6)
+        obs = obstacle_density(map_msg, gx, gy, radius_cells=obstacle_radius_cells)
         if obs > max_obstacle_density:
+            if rejection_stats is not None:
+                rejection_stats['obstacle_density'] += 1
             continue
 
-        info = unknown_gain(map_msg, fx, fy, radius_cells=6)
+        info = unknown_gain(map_msg, gx, gy, radius_cells=6)
         v = visited_count.get(key, 0)
         score = w_info * info - w_dist * d - w_obs * obs - w_visit * v
 
         if phase == 'RICH' and obs < rich_min_density:
+            if rejection_stats is not None:
+                rejection_stats['rich_min_density'] += 1
             continue
 
         if score > best_score:
             best_score = score
             best = (gx, gy)
 
+    if rejection_stats is not None and best is not None:
+        rejection_stats['selected'] = 1
     return best
