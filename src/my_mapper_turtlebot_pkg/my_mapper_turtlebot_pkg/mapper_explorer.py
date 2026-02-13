@@ -56,6 +56,8 @@ class MapperExplorer(Node):
         self.blacklist_time = {}
         self.hard_blacklist = set()
         self.hard_blacklist_time = {}
+        self.stalled_hotspot_time = {}
+        self.stalled_goal_count = {}
         self.visited_count = {}
         self.goal_fail_count = {}
         self.last_result = None
@@ -63,6 +65,7 @@ class MapperExplorer(Node):
         self.last_goal_selected_time_sec = None
 
         self.rich_min_density = 0.0
+        self.rich_min_unknown_gain = 0.12
         self.goal_timeout_sec = 60.0
         self.max_goal_retries = 1
         self.frontier_min_cluster_size = 3
@@ -80,6 +83,8 @@ class MapperExplorer(Node):
         self.map_margin_cells = 2
         self.min_clearance_radius_cells = 1
         self.hard_blacklist_ttl_sec = 20.0
+        self.stalled_hotspot_ttl_sec = 90.0
+        self.stalled_hotspot_trigger_count = 2
         self.blacklist_ttl_sec = 30.0
         self.no_goal_relax_after_sec = 12.0
         self.obstacle_density_radius_cells = 4
@@ -208,10 +213,15 @@ class MapperExplorer(Node):
 
     def _active_hard_blacklist(self):
         now = self._now_sec()
-        return {
+        active_hard = {
             key for key, ts in self.hard_blacklist_time.items()
             if (now - ts) <= self.hard_blacklist_ttl_sec
         }
+        active_stalled_hotspots = {
+            key for key, ts in self.stalled_hotspot_time.items()
+            if (now - ts) <= self.stalled_hotspot_ttl_sec
+        }
+        return active_hard | active_stalled_hotspots
 
     def _active_blacklist(self):
         now = self._now_sec()
@@ -226,9 +236,18 @@ class MapperExplorer(Node):
         self.blacklist_time = {k: self.blacklist_time[k] for k in active}
 
     def _prune_hard_blacklist(self):
-        active = self._active_hard_blacklist()
-        self.hard_blacklist = active
-        self.hard_blacklist_time = {k: self.hard_blacklist_time[k] for k in active}
+        now = self._now_sec()
+        active_hard = {
+            key for key, ts in self.hard_blacklist_time.items()
+            if (now - ts) <= self.hard_blacklist_ttl_sec
+        }
+        active_stalled_hotspots = {
+            key for key, ts in self.stalled_hotspot_time.items()
+            if (now - ts) <= self.stalled_hotspot_ttl_sec
+        }
+        self.hard_blacklist = active_hard | active_stalled_hotspots
+        self.hard_blacklist_time = {k: self.hard_blacklist_time[k] for k in active_hard}
+        self.stalled_hotspot_time = {k: self.stalled_hotspot_time[k] for k in active_stalled_hotspots}
 
     def _add_blacklist(self, key):
         self.blacklist.add(key)
@@ -237,6 +256,10 @@ class MapperExplorer(Node):
     def _add_hard_blacklist(self, key):
         self.hard_blacklist.add(key)
         self.hard_blacklist_time[key] = self._now_sec()
+
+    def _add_stalled_hotspot(self, key):
+        self.hard_blacklist.add(key)
+        self.stalled_hotspot_time[key] = self._now_sec()
 
     def _clear_all_blacklists(self, reason):
         now = self._now_sec()
@@ -249,6 +272,7 @@ class MapperExplorer(Node):
         self.blacklist_time.clear()
         self.hard_blacklist.clear()
         self.hard_blacklist_time.clear()
+        self.stalled_hotspot_time.clear()
         self.last_blacklist_clear_time_sec = now
         self.get_logger().warning(f'Clear blacklists: {reason}')
         return True
@@ -325,6 +349,7 @@ class MapperExplorer(Node):
             visited_count=self.visited_count,
             phase=self.phase.name,
             rich_min_density=self.rich_min_density,
+            rich_min_unknown_gain=self.rich_min_unknown_gain,
             w_dist=self.w_dist,
             w_obs=w_obs,
             w_info=self.w_info,
@@ -439,6 +464,7 @@ class MapperExplorer(Node):
             f'[{attempt_name}] total={stats.get("frontiers_total", 0)}, '
             f'offset={stats.get("offset_invalid", 0)}, '
             f'obs={stats.get("obstacle_density", 0)}, '
+            f'lowinfo={stats.get("rich_low_info", 0)}, '
             f'near={stats.get("too_near", 0)}, '
             f'blk={stats.get("blacklist_exact", 0) + stats.get("blacklist_radius", 0)}, '
             f'hblk={stats.get("hard_blacklist_exact", 0) + stats.get("hard_blacklist_radius", 0)}, '
@@ -566,6 +592,11 @@ class MapperExplorer(Node):
                 key = self._goal_key(self.current_goal)
                 self._add_blacklist(key)
                 self._add_hard_blacklist(key)
+                if reason == 'stalled_progress':
+                    cnt = self.stalled_goal_count.get(key, 0) + 1
+                    self.stalled_goal_count[key] = cnt
+                    if cnt >= self.stalled_hotspot_trigger_count:
+                        self._add_stalled_hotspot(key)
         else:
             self.get_logger().warning(f'Goal cancel rejected ({reason}).')
             self.last_status = GoalStatus.STATUS_ABORTED

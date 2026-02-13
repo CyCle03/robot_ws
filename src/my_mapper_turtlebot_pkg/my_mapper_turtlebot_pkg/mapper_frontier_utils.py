@@ -252,6 +252,7 @@ def select_goal(
     w_obs,
     w_info,
     w_visit,
+    rich_min_unknown_gain=0.0,
     min_goal_distance=0.35,
     max_obstacle_density=0.45,
     blacklist_radius=0.0,
@@ -277,6 +278,7 @@ def select_goal(
         rejection_stats['too_near'] = 0
         rejection_stats['obstacle_density'] = 0
         rejection_stats['rich_min_density'] = 0
+        rejection_stats['rich_low_info'] = 0
         rejection_stats['recent_penalized'] = 0
         rejection_stats['selected'] = 0
 
@@ -344,6 +346,10 @@ def select_goal(
             continue
 
         info = unknown_gain(map_msg, gx, gy, radius_cells=6)
+        if phase == 'RICH' and info < rich_min_unknown_gain:
+            if rejection_stats is not None:
+                rejection_stats['rich_low_info'] += 1
+            continue
         v = visited_count.get(key, 0)
         distance_reward = min(d, distance_reward_cap_m)
         score = w_info * info + w_dist * distance_reward - w_obs * obs - w_visit * v
