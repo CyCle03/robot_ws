@@ -112,8 +112,8 @@
   - 로봇과 너무 가까운 goal 제외: `distance < 0.45m`
   - 장애물 과밀 goal 제외: `obstacle_density > 0.30`
   - blacklist 근접 goal 제외: `distance_to_blacklist <= 0.60m`
-  - 맵 경계 근접 goal 제외: `map_margin_cells = 4` (맵 외곽 4셀 이내 제외)
-  - goal 주변 장애물 클리어런스 부족 제외: `min_clearance_radius_cells = 2`
+  - 맵 경계 근접 goal 제외: `map_margin_cells = 2` (맵 외곽 2셀 이내 제외)
+  - goal 주변 장애물 클리어런스 부족 제외: `min_clearance_radius_cells = 1`
 - 점수식:
   - `score = w_info*info - w_dist*distance - w_obs*obs - w_visit*visited_penalty`
   - 기본 가중치: `w_dist=1.0`, `w_obs=1.2`, `w_info=1.0`, `w_visit=0.8`
@@ -131,11 +131,11 @@
 - 동작:
   - 기본은 `Twist(0,0)` 유지
   - 전방 좌/우 최소 거리 중 작은 값을 `obstacle_distance`로 사용
-  - `obstacle_distance < stop_distance(0.5m)`이면 recovery 진입
-  - Recovery 1단계(후진): `0.4s`, `linear.x = -0.08`
-  - Recovery 2단계(회전): `최대 0.8s`, `angular.z = ±0.7`
+  - `obstacle_distance < stop_distance(0.45m)`이면 recovery 진입
+  - Recovery 1단계(후진): `0.25s`, `linear.x = -0.08`
+  - Recovery 2단계(회전): `최대 0.5s`, `angular.z = ±0.7`
   - 회전 방향: 좌/우 여유공간 비교(`front_left_min > front_right_min`이면 좌회전)
-  - `obstacle_distance > clear_distance(0.65m)`가 되면 recovery 종료
+  - `obstacle_distance > clear_distance(0.58m)`가 되면 recovery 종료
 
 ## 13. 매핑 실행 시 주의사항
 - SLAM은 하나만 실행해야 함 (`slam_toolbox`와 `cartographer` 동시 실행 금지)

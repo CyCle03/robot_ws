@@ -11,12 +11,12 @@ class DetectObstacle(Node):
     def __init__(self):
         super().__init__('detect_obstacle')
         self.enabled = True
-        self.stop_distance = 0.5
-        self.clear_distance = 0.65
+        self.stop_distance = 0.45
+        self.clear_distance = 0.58
         self.turn_speed = 0.7
         self.backup_speed = -0.08
-        self.backup_duration_sec = 0.4
-        self.turn_duration_sec = 0.8
+        self.backup_duration_sec = 0.25
+        self.turn_duration_sec = 0.5
         self.scan_ranges = []
         self.has_scan_received = False
         self.recovery_phase = 'idle'
