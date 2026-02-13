@@ -12,9 +12,16 @@ class DetectObstacle(Node):
         super().__init__('detect_obstacle')
         self.enabled = True
         self.stop_distance = 0.5
+        self.clear_distance = 0.65
         self.turn_speed = 0.7
+        self.backup_speed = -0.08
+        self.backup_duration_sec = 0.4
+        self.turn_duration_sec = 0.8
         self.scan_ranges = []
         self.has_scan_received = False
+        self.recovery_phase = 'idle'
+        self.phase_end_sec = 0.0
+        self.recovery_turn_direction = 1.0
         self.qos_profile = QoSProfile(depth=10)
 
         self.scan_sub = self.create_subscription(
@@ -47,27 +54,58 @@ class DetectObstacle(Node):
             return float('inf')
         return min(valid_values)
 
+    def _now_sec(self):
+        return self.get_clock().now().nanoseconds / 1e9
+
     def timer_callback(self):
         twist = Twist()
         if not self.enabled or not self.has_scan_received:
+            self.recovery_phase = 'idle'
             self.cmd_vel_pub.publish(twist)
             return
 
         scan_len = len(self.scan_ranges)
         if scan_len == 0:
+            self.recovery_phase = 'idle'
             self.cmd_vel_pub.publish(twist)
             return
 
+        now = self._now_sec()
         left_range = int(scan_len / 4)
         right_range = int(scan_len * 3 / 4)
-        left_min = self._get_valid_min(self.scan_ranges[0:left_range])
-        right_min = self._get_valid_min(self.scan_ranges[right_range:scan_len])
-        obstacle_distance = min(left_min, right_min)
+        front_left_min = self._get_valid_min(self.scan_ranges[0:left_range])
+        front_right_min = self._get_valid_min(self.scan_ranges[right_range:scan_len])
+        obstacle_distance = min(front_left_min, front_right_min)
+
+        # Recovery phase 1: brief backup to create clearance from tight obstacle gaps.
+        if self.recovery_phase == 'backup':
+            if now < self.phase_end_sec:
+                twist.linear.x = self.backup_speed
+                self.cmd_vel_pub.publish(twist)
+                return
+            self.recovery_phase = 'turn'
+            self.phase_end_sec = now + self.turn_duration_sec
+
+        # Recovery phase 2: rotate toward the wider side.
+        if self.recovery_phase == 'turn':
+            if obstacle_distance > self.clear_distance:
+                self.recovery_phase = 'idle'
+                self.cmd_vel_pub.publish(twist)
+                return
+            if now < self.phase_end_sec:
+                twist.angular.z = self.recovery_turn_direction * self.turn_speed
+                self.cmd_vel_pub.publish(twist)
+                return
+            self.recovery_phase = 'idle'
+            self.cmd_vel_pub.publish(twist)
+            return
 
         if obstacle_distance < self.stop_distance:
-            # left_min > right_min 이면 왼쪽 공간이 더 넓으므로 좌회전
-            turn_direction = 1.0 if left_min > right_min else -1.0
-            twist.angular.z = turn_direction * self.turn_speed
+            # front_left_min > front_right_min 이면 왼쪽 공간이 더 넓으므로 좌회전 방향 선택
+            self.recovery_turn_direction = 1.0 if front_left_min > front_right_min else -1.0
+            self.recovery_phase = 'backup'
+            self.phase_end_sec = now + self.backup_duration_sec
+            twist.linear.x = self.backup_speed
 
         self.cmd_vel_pub.publish(twist)
 

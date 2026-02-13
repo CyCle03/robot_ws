@@ -101,7 +101,7 @@
 - 상태 머신:
   - `IDLE -> SELECT_GOAL -> NAVIGATING -> EVALUATE -> (반복 또는 DONE)`
 - 탐색 단계:
-  - `RICH`: 장애물 밀도 높은 frontier 우선
+  - `RICH`: `rich_min_density` 이상 frontier만 허용(현재 기본값 `0.0`으로 사실상 전체 허용)
   - `COVERAGE`: 남은 frontier 커버리지 탐색
 
 ## 11. Frontier 선택/예외 처리 정책
@@ -109,16 +109,33 @@
   - `free(0)` 셀 중 주변 8-neighbor에 `unknown(-1)`이 존재하는 셀을 후보로 추출
   - BFS 클러스터링 후 클러스터 중심점을 goal 후보로 사용
 - 선택 필터:
-  - 로봇과 너무 가까운 goal 제외: `distance < 0.35m`
-  - 장애물 과밀 goal 제외: `obstacle_density > 0.45`
+  - 로봇과 너무 가까운 goal 제외: `distance < 0.45m`
+  - 장애물 과밀 goal 제외: `obstacle_density > 0.30`
+  - blacklist 근접 goal 제외: `distance_to_blacklist <= 0.60m`
 - 점수식:
-  - `score = w_obs*obs + w_info*info - w_dist*distance - w_visit*visited_penalty`
+  - `score = w_info*info - w_dist*distance - w_obs*obs - w_visit*visited_penalty`
+  - 기본 가중치: `w_dist=1.0`, `w_obs=1.2`, `w_info=1.0`, `w_visit=0.8`
 - 타임아웃/재시도:
   - goal timeout: `120s`
   - timeout 취소 발생 시 해당 goal 즉시 blacklist
   - goal 재시도 제한: `max_goal_retries = 1`
 
-## 12. 매핑 실행 시 주의사항
+## 12. 장애물 회피(DetectObstacle) 정책
+- 파일: `my_gui_turtlebot_pkg/detect_obstacle.py`
+- 입력:
+  - `scan` (`sensor_msgs/msg/LaserScan`)
+- 출력:
+  - `cmd_vel_avoid` (`geometry_msgs/msg/Twist`)
+- 동작:
+  - 기본은 `Twist(0,0)` 유지
+  - 전방 좌/우 최소 거리 중 작은 값을 `obstacle_distance`로 사용
+  - `obstacle_distance < stop_distance(0.5m)`이면 recovery 진입
+  - Recovery 1단계(후진): `0.4s`, `linear.x = -0.08`
+  - Recovery 2단계(회전): `최대 0.8s`, `angular.z = ±0.7`
+  - 회전 방향: 좌/우 여유공간 비교(`front_left_min > front_right_min`이면 좌회전)
+  - `obstacle_distance > clear_distance(0.65m)`가 되면 recovery 종료
+
+## 13. 매핑 실행 시 주의사항
 - SLAM은 하나만 실행해야 함 (`slam_toolbox`와 `cartographer` 동시 실행 금지)
 - `mapper_explorer.launch.py`는 탐색 노드만 실행하므로 아래 스택이 별도로 선행되어야 함:
   - Gazebo/Robot bringup (`/odom`, TF)

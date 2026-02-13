@@ -144,6 +144,7 @@ def select_goal(
     w_visit,
     min_goal_distance=0.35,
     max_obstacle_density=0.45,
+    blacklist_radius=0.0,
 ):
     best = None
     best_score = -1e18
@@ -151,6 +152,13 @@ def select_goal(
         key = (round(fx, 2), round(fy, 2))
         if key in blacklist:
             continue
+        if blacklist_radius > 0.0:
+            near_blacklisted = any(
+                math.hypot(fx - bx, fy - by) <= blacklist_radius
+                for bx, by in blacklist
+            )
+            if near_blacklisted:
+                continue
 
         d = math.hypot(fx - robot_x, fy - robot_y)
         if d < min_goal_distance:
@@ -162,7 +170,7 @@ def select_goal(
 
         info = unknown_gain(map_msg, fx, fy, radius_cells=6)
         v = visited_count.get(key, 0)
-        score = w_obs * obs + w_info * info - w_dist * d - w_visit * v
+        score = w_info * info - w_dist * d - w_obs * obs - w_visit * v
 
         if phase == 'RICH' and obs < rich_min_density:
             continue
