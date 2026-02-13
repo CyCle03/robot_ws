@@ -57,17 +57,17 @@ class MapperExplorer(Node):
 
         self.rich_min_density = 0.0
         self.goal_timeout_sec = 120.0
-        self.max_goal_retries = 1
+        self.max_goal_retries = 0
         self.frontier_min_cluster_size = 3
-        self.w_dist = 1.0
-        self.w_obs = 1.2
-        self.w_info = 1.0
+        self.w_dist = 0.7
+        self.w_obs = 0.6
+        self.w_info = 1.8
         self.w_visit = 0.8
         self.min_goal_distance = 0.45
-        self.max_obstacle_density = 0.30
-        self.blacklist_radius = 0.60
+        self.max_obstacle_density = 0.25
+        self.blacklist_radius = 0.80
         self.map_margin_cells = 2
-        self.min_clearance_radius_cells = 1
+        self.min_clearance_radius_cells = 2
 
         self.nav_client = ActionClient(self, NavigateToPose, '/navigate_to_pose')
         self.create_subscription(OccupancyGrid, '/map', self.map_callback, map_qos)

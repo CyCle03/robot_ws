@@ -96,6 +96,35 @@ def has_clearance_from_obstacles(map_msg, wx, wy, radius_cells):
     return True
 
 
+def compute_reachable_free_cells(map_msg, start_wx, start_wy):
+    w = map_msg.info.width
+    h = map_msg.info.height
+    data = map_msg.data
+    sx, sy = world_to_grid(map_msg, start_wx, start_wy)
+    if sx < 0 or sx >= w or sy < 0 or sy >= h:
+        return set()
+    if data[sy * w + sx] != 0:
+        return set()
+
+    reachable = set()
+    queue = deque([(sx, sy)])
+    reachable.add((sx, sy))
+    while queue:
+        cx, cy = queue.popleft()
+        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            nx = cx + dx
+            ny = cy + dy
+            if nx < 0 or nx >= w or ny < 0 or ny >= h:
+                continue
+            if (nx, ny) in reachable:
+                continue
+            if data[ny * w + nx] != 0:
+                continue
+            reachable.add((nx, ny))
+            queue.append((nx, ny))
+    return reachable
+
+
 def extract_frontiers(map_msg, min_cluster_size):
     w = map_msg.info.width
     h = map_msg.info.height
@@ -181,6 +210,7 @@ def select_goal(
 ):
     best = None
     best_score = -1e18
+    reachable = compute_reachable_free_cells(map_msg, robot_x, robot_y)
     for fx, fy in frontiers:
         key = (round(fx, 2), round(fy, 2))
         if key in blacklist:
@@ -197,6 +227,9 @@ def select_goal(
 
         d = math.hypot(fx - robot_x, fy - robot_y)
         if d < min_goal_distance:
+            continue
+        gx, gy = world_to_grid(map_msg, fx, fy)
+        if (gx, gy) not in reachable:
             continue
 
         obs = obstacle_density(map_msg, fx, fy, radius_cells=6)

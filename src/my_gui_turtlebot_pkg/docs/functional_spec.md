@@ -110,17 +110,18 @@
   - BFS 클러스터링 후 클러스터 중심점을 goal 후보로 사용
 - 선택 필터:
   - 로봇과 너무 가까운 goal 제외: `distance < 0.45m`
-  - 장애물 과밀 goal 제외: `obstacle_density > 0.30`
-  - blacklist 근접 goal 제외: `distance_to_blacklist <= 0.60m`
+  - 현재 위치에서 free-space 연결 경로가 없는 goal 제외(4-neighbor BFS reachability)
+  - 장애물 과밀 goal 제외: `obstacle_density > 0.25`
+  - blacklist 근접 goal 제외: `distance_to_blacklist <= 0.80m`
   - 맵 경계 근접 goal 제외: `map_margin_cells = 2` (맵 외곽 2셀 이내 제외)
-  - goal 주변 장애물 클리어런스 부족 제외: `min_clearance_radius_cells = 1`
+  - goal 주변 장애물 클리어런스 부족 제외: `min_clearance_radius_cells = 2`
 - 점수식:
   - `score = w_info*info - w_dist*distance - w_obs*obs - w_visit*visited_penalty`
-  - 기본 가중치: `w_dist=1.0`, `w_obs=1.2`, `w_info=1.0`, `w_visit=0.8`
+  - 기본 가중치(빠른 스캔 우선): `w_dist=0.7`, `w_obs=0.6`, `w_info=1.8`, `w_visit=0.8`
 - 타임아웃/재시도:
   - goal timeout: `120s`
   - timeout 취소 발생 시 해당 goal 즉시 blacklist
-  - goal 재시도 제한: `max_goal_retries = 1`
+  - goal 재시도 제한: `max_goal_retries = 0` (실패 1회 시 즉시 blacklist)
 
 ## 12. 장애물 회피(DetectObstacle) 정책
 - 파일: `my_gui_turtlebot_pkg/detect_obstacle.py`
@@ -143,3 +144,5 @@
   - Gazebo/Robot bringup (`/odom`, TF)
   - SLAM (`/map`)
   - Nav2 (`/navigate_to_pose`)
+- `stress_maze_world.launch.py` 기본 스폰 위치:
+  - `x_pose=-1.60`, `y_pose=-1.60`
