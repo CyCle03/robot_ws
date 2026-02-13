@@ -473,7 +473,7 @@ class MapperExplorer(Node):
         self.last_result = wrapped.result
         self.last_status = wrapped.status
         # Guard against false-positive success where nav reports success but robot
-        # either barely moved or still remains far from the goal.
+        # both barely moved and still remains far from the goal.
         if (
             self.last_status == GoalStatus.STATUS_SUCCEEDED
             and self.current_goal is not None
@@ -487,10 +487,8 @@ class MapperExplorer(Node):
             remaining = ((gx - self.robot_x) ** 2 + (gy - self.robot_y) ** 2) ** 0.5
             if (
                 planned >= self.false_success_min_planned_m
-                and (
-                    moved < self.false_success_min_moved_m
-                    or remaining > self.goal_reached_tolerance_m
-                )
+                and moved < self.false_success_min_moved_m
+                and remaining > self.goal_reached_tolerance_m
             ):
                 self.get_logger().warning(
                     'Goal reported succeeded but considered invalid '
