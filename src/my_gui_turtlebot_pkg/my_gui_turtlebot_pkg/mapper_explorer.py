@@ -63,11 +63,12 @@ class MapperExplorer(Node):
         self.goal_timeout_sec = 120.0
         self.max_goal_retries = 0
         self.frontier_min_cluster_size = 3
-        self.w_dist = 0.7
+        self.w_dist = 1.0
         self.w_obs = 0.6
         self.w_info = 1.8
         self.w_visit = 0.8
-        self.min_goal_distance = 0.45
+        self.min_goal_distance = 0.75
+        self.distance_reward_cap_m = 2.5
         self.max_obstacle_density = 0.25
         self.blacklist_radius = 0.80
         self.hard_blacklist_radius = 1.00
@@ -205,6 +206,7 @@ class MapperExplorer(Node):
         max_obstacle_density=None,
         min_clearance_radius_cells=None,
         hard_blacklist_radius=None,
+        min_goal_distance=None,
         rejection_stats=None,
     ):
         w_obs = self.w_obs if self.phase == Phase.RICH else self.w_obs * 0.4
@@ -222,7 +224,8 @@ class MapperExplorer(Node):
             w_obs=w_obs,
             w_info=self.w_info,
             w_visit=self.w_visit,
-            min_goal_distance=self.min_goal_distance,
+            min_goal_distance=min_goal_distance
+            if min_goal_distance is not None else self.min_goal_distance,
             max_obstacle_density=max_obstacle_density
             if max_obstacle_density is not None else self.max_obstacle_density,
             blacklist_radius=self.blacklist_radius,
@@ -232,16 +235,24 @@ class MapperExplorer(Node):
             min_clearance_radius_cells=min_clearance_radius_cells
             if min_clearance_radius_cells is not None else self.min_clearance_radius_cells,
             obstacle_radius_cells=self.obstacle_density_radius_cells,
+            distance_reward_cap_m=self.distance_reward_cap_m,
             rejection_stats=rejection_stats,
         )
 
     def select_goal_with_fallback(self, frontiers):
         attempts = [
             {'name': 'base', 'params': {}},
-            {'name': 'loose_clearance', 'params': {'min_clearance_radius_cells': 1}},
+            {
+                'name': 'loose_clearance',
+                'params': {'min_clearance_radius_cells': 1, 'min_goal_distance': 0.60}
+            },
             {
                 'name': 'loose_obstacle',
-                'params': {'min_clearance_radius_cells': 1, 'max_obstacle_density': 0.35}
+                'params': {
+                    'min_clearance_radius_cells': 1,
+                    'max_obstacle_density': 0.35,
+                    'min_goal_distance': 0.50
+                }
             },
             {
                 'name': 'loose_blacklist',
@@ -249,6 +260,7 @@ class MapperExplorer(Node):
                     'min_clearance_radius_cells': 1,
                     'max_obstacle_density': 0.40,
                     'hard_blacklist_radius': 0.50,
+                    'min_goal_distance': 0.45,
                 }
             },
             {
@@ -257,6 +269,7 @@ class MapperExplorer(Node):
                     'min_clearance_radius_cells': 0,
                     'max_obstacle_density': 0.55,
                     'hard_blacklist_radius': 0.35,
+                    'min_goal_distance': 0.30,
                 }
             },
         ]
@@ -284,6 +297,7 @@ class MapperExplorer(Node):
                     max_obstacle_density=0.60,
                     min_clearance_radius_cells=0,
                     hard_blacklist_radius=0.0,
+                    min_goal_distance=0.25,
                     rejection_stats=stats,
                 )
                 if goal is None:

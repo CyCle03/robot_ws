@@ -110,28 +110,35 @@
   - BFS 클러스터링 후 클러스터 중심점을 goal 후보로 사용
   - 실제 nav goal은 frontier 중심에서 로봇 방향으로 오프셋한 free 셀을 사용
 - 선택 필터:
-  - 로봇과 너무 가까운 goal 제외: `distance < 0.45m`
+  - 로봇과 너무 가까운 goal 제외(기본): `distance < 0.75m`
   - 현재 위치에서 free-space 연결 경로가 없는 goal 제외(4-neighbor BFS reachability)
-  - 장애물 과밀 goal 제외: `obstacle_density > 0.25`
+  - 장애물 과밀 goal 제외: `obstacle_density(goal 기준, radius=4) > 0.25`
   - blacklist 근접 goal 제외: `distance_to_blacklist <= 0.80m`
   - hard blacklist 근접 goal 제외: `distance_to_hard_blacklist <= 1.00m`
   - 맵 경계 근접 goal 제외: `map_margin_cells = 2` (맵 외곽 2셀 이내 제외)
   - goal 주변 장애물 클리어런스 부족 제외: `min_clearance_radius_cells = 2`
   - fallback ladder:
-    - 1차: 기본 필터
-    - 2차: `min_clearance_radius_cells = 1`
-    - 3차: `min_clearance_radius_cells = 1`, `max_obstacle_density = 0.35`
-    - 4차: 위 조건 + `hard_blacklist_radius = 0.50`
+    - 1차(`base`): 기본 필터
+    - 2차(`loose_clearance`): `min_clearance_radius_cells = 1`, `min_goal_distance = 0.60`
+    - 3차(`loose_obstacle`): `min_clearance_radius_cells = 1`, `max_obstacle_density = 0.35`, `min_goal_distance = 0.50`
+    - 4차(`loose_blacklist`): 위 조건 + `hard_blacklist_radius = 0.50`, `min_goal_distance = 0.45`
+    - 5차(`rescue`): `min_clearance_radius_cells = 0`, `max_obstacle_density = 0.55`, `hard_blacklist_radius = 0.35`, `min_goal_distance = 0.30`
+    - `no_goal` 상태가 오래 지속되면(`12s`) hard blacklist를 만료하고 `ttl_rescue`로 재시도:
+      - `max_obstacle_density = 0.60`, `min_clearance_radius_cells = 0`, `hard_blacklist_radius = 0.0`, `min_goal_distance = 0.25`
 - 점수식:
-  - `score = w_info*info - w_dist*distance - w_obs*obs - w_visit*visited_penalty`
-  - 기본 가중치(빠른 스캔 우선): `w_dist=0.7`, `w_obs=0.6`, `w_info=1.8`, `w_visit=0.8`
+  - `score = w_info*info + w_dist*min(distance, distance_reward_cap_m) - w_obs*obs - w_visit*visited_penalty`
+  - 거리 보상은 상한(`distance_reward_cap_m = 2.5`)을 두어 너무 먼 goal만 과도 선호하지 않도록 제한
+  - 기본 가중치(빠른 스캔 우선): `w_dist=1.0`, `w_obs=0.6`, `w_info=1.8`, `w_visit=0.8`
   - `COVERAGE` 단계에서는 장애물 페널티를 추가 완화(`w_obs * 0.4`)
+  - 후보가 선택되지 않으면 탈락 통계를 로그로 출력:
+    - `Goal selection failed [attempt] total/offset/obs/near/blk/hblk/margin`
 - 타임아웃/재시도:
   - goal timeout: `120s`
   - timeout/거절/실패 goal은 hard blacklist에도 즉시 반영
   - goal 재시도 제한: `max_goal_retries = 0` (실패 1회 시 즉시 blacklist)
   - hard blacklist TTL: `20s`
-  - `no_goal` 상태가 `12s` 이상 지속되면 hard blacklist 만료 처리 후 재선택
+  - Nav2의 false-positive success 방지:
+    - 성공 응답이어도 `(planned >= 0.35m)` 이면서 `(moved < 0.20m 또는 remaining > 0.20m)`이면 실패로 처리
 
 ## 12. 장애물 회피(DetectObstacle) 정책
 - 파일: `my_gui_turtlebot_pkg/detect_obstacle.py`

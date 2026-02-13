@@ -259,6 +259,7 @@ def select_goal(
     map_margin_cells=0,
     min_clearance_radius_cells=0,
     obstacle_radius_cells=4,
+    distance_reward_cap_m=2.5,
     rejection_stats=None,
 ):
     if rejection_stats is not None:
@@ -340,7 +341,8 @@ def select_goal(
 
         info = unknown_gain(map_msg, gx, gy, radius_cells=6)
         v = visited_count.get(key, 0)
-        score = w_info * info - w_dist * d - w_obs * obs - w_visit * v
+        distance_reward = min(d, distance_reward_cap_m)
+        score = w_info * info + w_dist * distance_reward - w_obs * obs - w_visit * v
 
         if phase == 'RICH' and obs < rich_min_density:
             if rejection_stats is not None:
