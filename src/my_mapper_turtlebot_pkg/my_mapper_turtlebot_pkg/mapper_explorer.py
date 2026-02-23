@@ -63,6 +63,8 @@ class MapperExplorer(Node):
         self.last_result = None
         self.last_status = None
         self.last_goal_selected_time_sec = None
+        self.last_dispatched_goal = None
+        self.last_dispatched_goal_time_sec = None
 
         self.rich_min_density = 0.0
         self.rich_min_unknown_gain = 0.12
@@ -101,6 +103,8 @@ class MapperExplorer(Node):
         self.last_stalled_cancel_time_sec = None
         self.blacklist_clear_cooldown_sec = 15.0
         self.last_blacklist_clear_time_sec = None
+        self.same_goal_reject_radius_m = 0.20
+        self.same_goal_reject_window_sec = 12.0
 
         self.nav_client = ActionClient(self, NavigateToPose, '/navigate_to_pose')
         self.create_subscription(OccupancyGrid, '/map', self.map_callback, map_qos)
@@ -380,7 +384,7 @@ class MapperExplorer(Node):
             min_clearance_radius_cells=1,
             blacklist_radius=0.0,
             hard_blacklist_radius=0.0,
-            min_goal_distance=0.12,
+            min_goal_distance=0.25,
             rejection_stats=stats,
         )
         if goal is None:
@@ -417,7 +421,7 @@ class MapperExplorer(Node):
                     'min_clearance_radius_cells': 1,
                     'max_obstacle_density': 0.45,
                     'hard_blacklist_radius': 0.20,
-                    'min_goal_distance': 0.15,
+                    'min_goal_distance': 0.30,
                 }
             },
         ]
@@ -428,6 +432,8 @@ class MapperExplorer(Node):
             params = attempt['params']
             goal = self._select_goal(frontiers, rejection_stats=stats, **params)
             if goal is not None:
+                if self._is_recent_duplicate_goal(goal):
+                    continue
                 return goal
             last_attempt_name = attempt['name']
             last_stats = stats
@@ -455,6 +461,16 @@ class MapperExplorer(Node):
         if last_stats is not None:
             self._log_goal_rejection_stats(last_attempt_name, last_stats)
         return None
+
+    def _is_recent_duplicate_goal(self, goal):
+        if self.last_dispatched_goal is None or self.last_dispatched_goal_time_sec is None:
+            return False
+        if (self._now_sec() - self.last_dispatched_goal_time_sec) > self.same_goal_reject_window_sec:
+            return False
+        return (
+            ((goal[0] - self.last_dispatched_goal[0]) ** 2 + (goal[1] - self.last_dispatched_goal[1]) ** 2) ** 0.5
+            <= self.same_goal_reject_radius_m
+        )
 
     def _log_goal_rejection_stats(self, attempt_name, stats):
         if not stats:
@@ -497,6 +513,8 @@ class MapperExplorer(Node):
         if len(self.recent_goals) > self.recent_goals_maxlen:
             self.recent_goals.pop(0)
         self.get_logger().info(f'Send goal: x={gx:.2f}, y={gy:.2f}, phase={self.phase.name}')
+        self.last_dispatched_goal = (gx, gy)
+        self.last_dispatched_goal_time_sec = self._now_sec()
         future = self.nav_client.send_goal_async(goal)
         future.add_done_callback(self.goal_response_callback)
 
