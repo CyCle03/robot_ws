@@ -73,7 +73,7 @@ class MapperExplorer(Node):
         self.w_obs = 0.9
         self.w_info = 1.8
         self.w_visit = 0.8
-        self.min_goal_distance = 0.90
+        self.min_goal_distance = 0.35
         self.distance_reward_cap_m = 2.5
         self.max_obstacle_density = 0.24
         self.blacklist_radius = 0.75
@@ -380,7 +380,7 @@ class MapperExplorer(Node):
             min_clearance_radius_cells=0,
             blacklist_radius=0.0,
             hard_blacklist_radius=0.0,
-            min_goal_distance=0.25,
+            min_goal_distance=0.12,
             rejection_stats=stats,
         )
         if goal is None:
@@ -417,7 +417,7 @@ class MapperExplorer(Node):
                     'min_clearance_radius_cells': 0,
                     'max_obstacle_density': 0.55,
                     'hard_blacklist_radius': 0.35,
-                    'min_goal_distance': 0.30,
+                    'min_goal_distance': 0.15,
                 }
             },
         ]

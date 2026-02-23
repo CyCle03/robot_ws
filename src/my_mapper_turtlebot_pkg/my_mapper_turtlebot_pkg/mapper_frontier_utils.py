@@ -143,8 +143,8 @@ def offset_goal_toward_robot(
     reachable,
     map_margin_cells,
     min_clearance_radius_cells,
-    start_offset=0.20,
-    max_offset=0.45,
+    start_offset=0.10,
+    max_offset=0.55,
     step=0.05,
 ):
     d = math.hypot(robot_x - frontier_x, robot_y - frontier_y)
