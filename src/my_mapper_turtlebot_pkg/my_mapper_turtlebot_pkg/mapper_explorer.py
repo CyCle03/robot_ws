@@ -75,27 +75,27 @@ class MapperExplorer(Node):
         self.w_visit = 0.8
         self.min_goal_distance = 0.35
         self.distance_reward_cap_m = 2.5
-        self.max_obstacle_density = 0.24
+        self.max_obstacle_density = 0.22
         self.blacklist_radius = 0.75
-        self.hard_blacklist_radius = 0.95
+        self.hard_blacklist_radius = 0.60
         self.recent_goal_radius = 1.00
         self.recent_goal_penalty = 2.3
         self.map_margin_cells = 2
         self.min_clearance_radius_cells = 2
-        self.hard_blacklist_ttl_sec = 120.0
+        self.hard_blacklist_ttl_sec = 45.0
         self.stalled_hotspot_ttl_sec = 180.0
         self.stalled_hotspot_trigger_count = 1
-        self.blacklist_ttl_sec = 75.0
-        self.no_goal_relax_after_sec = 25.0
+        self.blacklist_ttl_sec = 35.0
+        self.no_goal_relax_after_sec = 12.0
         self.obstacle_density_radius_cells = 4
         self.false_success_min_planned_m = 0.35
         self.false_success_min_moved_m = 0.20
         self.goal_reached_tolerance_m = 0.20
         self.progress_min_distance_m = 0.20
-        self.progress_stall_reset_sec = 18.0
+        self.progress_stall_reset_sec = 28.0
         self.post_stall_blacklist_clear_grace_sec = 45.0
-        self.post_stall_hard_blacklist_boost_sec = 60.0
-        self.post_stall_hard_blacklist_radius_boost = 0.50
+        self.post_stall_hard_blacklist_boost_sec = 30.0
+        self.post_stall_hard_blacklist_radius_boost = 0.20
         self.last_progress_pose = None
         self.last_progress_time_sec = None
         self.last_stalled_cancel_time_sec = None
@@ -376,8 +376,8 @@ class MapperExplorer(Node):
         stats = {}
         goal = self._select_goal(
             frontiers,
-            max_obstacle_density=0.60,
-            min_clearance_radius_cells=0,
+            max_obstacle_density=0.50,
+            min_clearance_radius_cells=1,
             blacklist_radius=0.0,
             hard_blacklist_radius=0.0,
             min_goal_distance=0.12,
@@ -407,16 +407,16 @@ class MapperExplorer(Node):
                 'params': {
                     'min_clearance_radius_cells': 1,
                     'max_obstacle_density': 0.40,
-                    'hard_blacklist_radius': 0.50,
+                    'hard_blacklist_radius': 0.30,
                     'min_goal_distance': 0.45,
                 }
             },
             {
                 'name': 'rescue',
                 'params': {
-                    'min_clearance_radius_cells': 0,
-                    'max_obstacle_density': 0.55,
-                    'hard_blacklist_radius': 0.35,
+                    'min_clearance_radius_cells': 1,
+                    'max_obstacle_density': 0.45,
+                    'hard_blacklist_radius': 0.20,
                     'min_goal_distance': 0.15,
                 }
             },
