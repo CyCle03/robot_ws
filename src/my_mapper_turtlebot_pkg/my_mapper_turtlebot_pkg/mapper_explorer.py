@@ -3,6 +3,7 @@ from enum import Enum
 import rclpy
 from action_msgs.msg import GoalStatus
 from geometry_msgs.msg import PoseStamped
+from geometry_msgs.msg import Twist
 from nav2_msgs.action import NavigateToPose
 from nav_msgs.msg import OccupancyGrid
 from nav_msgs.msg import Odometry
@@ -18,10 +19,11 @@ from .mapper_frontier_utils import select_goal
 
 class ExplorerState(Enum):
     IDLE = 0
-    SELECT_GOAL = 1
-    NAVIGATING = 2
-    EVALUATE = 3
-    DONE = 4
+    INITIAL_SPIN = 1
+    SELECT_GOAL = 2
+    NAVIGATING = 3
+    EVALUATE = 4
+    DONE = 5
 
 
 class Phase(Enum):
@@ -65,6 +67,12 @@ class MapperExplorer(Node):
         self.last_goal_selected_time_sec = None
         self.last_dispatched_goal = None
         self.last_dispatched_goal_time_sec = None
+        self.initial_spin_enabled = True
+        self.initial_spin_duration_sec = 11.0
+        self.initial_spin_angular_vel = 0.60
+        self.initial_spin_started_sec = None
+        self.initial_spin_done = False
+        self.initial_spin_stop_sent = False
 
         self.rich_min_density = 0.0
         self.rich_min_unknown_gain = 0.12
@@ -107,9 +115,11 @@ class MapperExplorer(Node):
         self.same_goal_reject_window_sec = 12.0
 
         self.nav_client = ActionClient(self, NavigateToPose, '/navigate_to_pose')
+        self.cmd_vel_pub = self.create_publisher(Twist, '/cmd_vel', 10)
         self.create_subscription(OccupancyGrid, '/map', self.map_callback, map_qos)
         self.create_subscription(Odometry, '/odom', self.odom_callback, qos_profile_sensor_data)
         self.timer = self.create_timer(1.0, self.step)
+        self.cmd_timer = self.create_timer(0.1, self.cmd_tick)
 
     def map_callback(self, msg):
         self.map_msg = msg
@@ -126,6 +136,8 @@ class MapperExplorer(Node):
 
     def step(self):
         if self.map_msg is None or self.robot_x is None:
+            return
+        if self._run_initial_spin():
             return
         self._prune_blacklist()
         self._prune_hard_blacklist()
@@ -201,6 +213,40 @@ class MapperExplorer(Node):
             self.last_result = None
             self.last_status = None
             self.state = ExplorerState.SELECT_GOAL
+
+    def cmd_tick(self):
+        if self.initial_spin_started_sec is None or self.initial_spin_done:
+            return
+        twist = Twist()
+        twist.angular.z = self.initial_spin_angular_vel
+        self.cmd_vel_pub.publish(twist)
+
+    def _publish_stop(self):
+        twist = Twist()
+        self.cmd_vel_pub.publish(twist)
+
+    def _run_initial_spin(self):
+        if not self.initial_spin_enabled or self.initial_spin_done:
+            return False
+        now = self._now_sec()
+        if self.initial_spin_started_sec is None:
+            self.initial_spin_started_sec = now
+            self.state = ExplorerState.INITIAL_SPIN
+            self.get_logger().info(
+                f'Initial spin start ({self.initial_spin_duration_sec:.1f}s)'
+            )
+            return True
+        elapsed = now - self.initial_spin_started_sec
+        if elapsed < self.initial_spin_duration_sec:
+            self.state = ExplorerState.INITIAL_SPIN
+            return True
+        if not self.initial_spin_stop_sent:
+            self._publish_stop()
+            self.initial_spin_stop_sent = True
+        self.initial_spin_done = True
+        self.state = ExplorerState.SELECT_GOAL
+        self.get_logger().info('Initial spin complete. Start frontier exploration.')
+        return False
 
     def _now_sec(self):
         return self.get_clock().now().nanoseconds / 1e9
