@@ -6,8 +6,8 @@ def world_to_grid(map_msg, wx, wy):
     ox = map_msg.info.origin.position.x
     oy = map_msg.info.origin.position.y
     res = map_msg.info.resolution
-    gx = int((wx - ox) / res)
-    gy = int((wy - oy) / res)
+    gx = math.floor((wx - ox) / res)
+    gy = math.floor((wy - oy) / res)
     return gx, gy
 
 
@@ -66,8 +66,8 @@ def unknown_gain(map_msg, wx, wy, radius_cells=6):
 
 
 def is_within_map_margin(map_msg, wx, wy, margin_cells):
-    if margin_cells <= 0:
-        return True
+    if margin_cells < 0:
+        margin_cells = 0
     gx, gy = world_to_grid(map_msg, wx, wy)
     w = map_msg.info.width
     h = map_msg.info.height
@@ -289,6 +289,12 @@ def select_goal(
     distance_reward_cap_m=2.5,
     rejection_stats=None,
 ):
+    effective_min_goal_distance = min_goal_distance
+    # When only a few frontiers exist, strict near-goal rejection can stall
+    # exploration even though a short move is better than selecting nothing.
+    if len(frontiers) <= 2:
+        effective_min_goal_distance = min(min_goal_distance, 0.05)
+
     if rejection_stats is not None:
         rejection_stats.clear()
         rejection_stats['frontiers_total'] = len(frontiers)
@@ -357,7 +363,7 @@ def select_goal(
                 continue
 
         d = math.hypot(gx - robot_x, gy - robot_y)
-        if d < min_goal_distance:
+        if d < effective_min_goal_distance:
             if rejection_stats is not None:
                 rejection_stats['too_near'] += 1
             continue
