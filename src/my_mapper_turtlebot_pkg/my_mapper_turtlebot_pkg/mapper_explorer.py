@@ -379,6 +379,7 @@ class MapperExplorer(Node):
         *,
         max_obstacle_density=None,
         min_clearance_radius_cells=None,
+        map_margin_cells=None,
         hard_blacklist_radius=None,
         blacklist_radius=None,
         min_goal_distance=None,
@@ -423,7 +424,8 @@ class MapperExplorer(Node):
             recent_goals=self.recent_goals,
             recent_goal_radius=self.recent_goal_radius,
             recent_goal_penalty=self.recent_goal_penalty,
-            map_margin_cells=self.map_margin_cells,
+            map_margin_cells=map_margin_cells
+            if map_margin_cells is not None else self.map_margin_cells,
             min_clearance_radius_cells=min_clearance_radius_cells
             if min_clearance_radius_cells is not None else self.min_clearance_radius_cells,
             obstacle_radius_cells=self.obstacle_density_radius_cells,
@@ -436,10 +438,11 @@ class MapperExplorer(Node):
         goal = self._select_goal(
             frontiers,
             max_obstacle_density=0.50,
-            min_clearance_radius_cells=1,
+            min_clearance_radius_cells=0,
+            map_margin_cells=0,
             blacklist_radius=0.0,
             hard_blacklist_radius=0.0,
-            min_goal_distance=0.25,
+            min_goal_distance=0.10,
             rejection_stats=stats,
         )
         if goal is None:
@@ -473,7 +476,8 @@ class MapperExplorer(Node):
             {
                 'name': 'rescue',
                 'params': {
-                    'min_clearance_radius_cells': 1,
+                    'min_clearance_radius_cells': 0,
+                    'map_margin_cells': 0,
                     'max_obstacle_density': 0.45,
                     'hard_blacklist_radius': 0.20,
                     'min_goal_distance': 0.15,
@@ -482,7 +486,8 @@ class MapperExplorer(Node):
             {
                 'name': 'ultra_near_rescue',
                 'params': {
-                    'min_clearance_radius_cells': 1,
+                    'min_clearance_radius_cells': 0,
+                    'map_margin_cells': 0,
                     'max_obstacle_density': 0.50,
                     'hard_blacklist_radius': 0.0,
                     'blacklist_radius': 0.0,
