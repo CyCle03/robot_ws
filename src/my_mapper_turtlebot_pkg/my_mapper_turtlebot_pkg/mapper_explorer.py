@@ -8,7 +8,6 @@ from nav2_msgs.action import NavigateToPose
 from nav_msgs.msg import OccupancyGrid
 from nav_msgs.msg import Odometry
 from rclpy.action import ActionClient
-from rclpy.exceptions import RCLError
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy
 from rclpy.qos import QoSProfile
@@ -68,9 +67,18 @@ class MapperExplorer(Node):
         self.last_goal_selected_time_sec = None
         self.last_dispatched_goal = None
         self.last_dispatched_goal_time_sec = None
-        self.initial_spin_enabled = True
-        self.initial_spin_duration_sec = 11.0
-        self.initial_spin_angular_vel = 0.60
+        self.declare_parameter('initial_spin_enabled', True)
+        self.declare_parameter('initial_spin_duration_sec', 2.0)
+        self.declare_parameter('initial_spin_angular_vel', 0.60)
+        self.initial_spin_enabled = bool(
+            self.get_parameter('initial_spin_enabled').value
+        )
+        self.initial_spin_duration_sec = float(
+            self.get_parameter('initial_spin_duration_sec').value
+        )
+        self.initial_spin_angular_vel = float(
+            self.get_parameter('initial_spin_angular_vel').value
+        )
         self.initial_spin_started_sec = None
         self.initial_spin_done = False
         self.initial_spin_stop_sent = False
@@ -468,7 +476,17 @@ class MapperExplorer(Node):
                     'min_clearance_radius_cells': 1,
                     'max_obstacle_density': 0.45,
                     'hard_blacklist_radius': 0.20,
-                    'min_goal_distance': 0.30,
+                    'min_goal_distance': 0.15,
+                }
+            },
+            {
+                'name': 'ultra_near_rescue',
+                'params': {
+                    'min_clearance_radius_cells': 1,
+                    'max_obstacle_density': 0.50,
+                    'hard_blacklist_radius': 0.0,
+                    'blacklist_radius': 0.0,
+                    'min_goal_distance': 0.10,
                 }
             },
         ]
@@ -684,7 +702,7 @@ def main(args=None):
         try:
             if rclpy.ok():
                 rclpy.shutdown()
-        except RCLError:
+        except Exception:
             pass
 
 
