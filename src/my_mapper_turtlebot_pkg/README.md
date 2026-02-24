@@ -26,7 +26,7 @@ source ~/robot_ws/install/setup.bash
    - `source /opt/ros/humble/setup.bash`
    - `export ROS_DOMAIN_ID=4`
    - `export TURTLEBOT3_MODEL=burger`
-   - `export LDS_MODEL=LDS-02`
+   - `export LDS_MODEL=LDS-01`
    - `ros2 launch turtlebot3_bringup robot.launch.py`
 2. Nav2 + SLAM (원격 PC)
    - `source /opt/ros/humble/setup.bash`
