@@ -8,6 +8,7 @@ from nav2_msgs.action import NavigateToPose
 from nav_msgs.msg import OccupancyGrid
 from nav_msgs.msg import Odometry
 from rclpy.action import ActionClient
+from rclpy.exceptions import RCLError
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy
 from rclpy.qos import QoSProfile
@@ -680,7 +681,11 @@ def main(args=None):
         pass
     finally:
         node.destroy_node()
-        rclpy.shutdown()
+        try:
+            if rclpy.ok():
+                rclpy.shutdown()
+        except RCLError:
+            pass
 
 
 if __name__ == '__main__':
