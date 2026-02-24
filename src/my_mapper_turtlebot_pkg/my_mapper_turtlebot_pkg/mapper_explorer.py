@@ -70,6 +70,7 @@ class MapperExplorer(Node):
         self.declare_parameter('initial_spin_enabled', True)
         self.declare_parameter('initial_spin_duration_sec', 2.0)
         self.declare_parameter('initial_spin_angular_vel', 0.60)
+        self.declare_parameter('goal_reselection_cooldown_sec', 4.0)
         self.initial_spin_enabled = bool(
             self.get_parameter('initial_spin_enabled').value
         )
@@ -78,6 +79,9 @@ class MapperExplorer(Node):
         )
         self.initial_spin_angular_vel = float(
             self.get_parameter('initial_spin_angular_vel').value
+        )
+        self.goal_reselection_cooldown_sec = float(
+            self.get_parameter('goal_reselection_cooldown_sec').value
         )
         self.initial_spin_started_sec = None
         self.initial_spin_done = False
@@ -157,6 +161,12 @@ class MapperExplorer(Node):
             return
 
         if self.state == ExplorerState.SELECT_GOAL:
+            if (
+                self.last_goal_selected_time_sec is not None
+                and (self._now_sec() - self.last_goal_selected_time_sec)
+                < self.goal_reselection_cooldown_sec
+            ):
+                return
             frontiers = self.extract_frontiers(self.map_msg)
             self.get_logger().info(f'Frontier clusters: {len(frontiers)}')
             if not frontiers:
