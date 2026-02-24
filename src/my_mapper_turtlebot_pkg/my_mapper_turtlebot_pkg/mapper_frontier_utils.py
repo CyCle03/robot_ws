@@ -111,9 +111,31 @@ def compute_reachable_free_cells(map_msg, start_wx, start_wy):
     data = map_msg.data
     sx, sy = world_to_grid(map_msg, start_wx, start_wy)
     if sx < 0 or sx >= w or sy < 0 or sy >= h:
-        return set()
+        return None
+
     if data[sy * w + sx] != 0:
-        return set()
+        # Robot pose can briefly land on unknown/occupied cells in the map due to
+        # map update latency. Try to seed BFS from the nearest free neighbor.
+        found = False
+        for radius in range(1, 9):
+            for dy in range(-radius, radius + 1):
+                for dx in range(-radius, radius + 1):
+                    if max(abs(dx), abs(dy)) != radius:
+                        continue
+                    nx = sx + dx
+                    ny = sy + dy
+                    if nx < 0 or nx >= w or ny < 0 or ny >= h:
+                        continue
+                    if data[ny * w + nx] == 0:
+                        sx, sy = nx, ny
+                        found = True
+                        break
+                if found:
+                    break
+            if found:
+                break
+        if not found:
+            return None
 
     reachable = set()
     queue = deque([(sx, sy)])
@@ -166,10 +188,11 @@ def offset_goal_toward_robot(
         if not has_clearance_from_obstacles(map_msg, gx, gy, min_clearance_radius_cells):
             offset += step
             continue
-        gix, giy = world_to_grid(map_msg, gx, gy)
-        if (gix, giy) not in reachable:
-            offset += step
-            continue
+        if reachable is not None:
+            gix, giy = world_to_grid(map_msg, gx, gy)
+            if (gix, giy) not in reachable:
+                offset += step
+                continue
         return gx, gy
     return None
 

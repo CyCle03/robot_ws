@@ -40,6 +40,7 @@ def generate_launch_description():
         executable='mapper_explorer',
         name='mapper_explorer',
         output='screen',
+        parameters=[{'use_sim_time': True}],
     )
 
     return LaunchDescription(
