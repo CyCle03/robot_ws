@@ -2,6 +2,7 @@ from enum import Enum
 
 import rclpy
 from action_msgs.msg import GoalStatus
+from geometry_msgs.msg import PoseWithCovarianceStamped
 from geometry_msgs.msg import PoseStamped
 from geometry_msgs.msg import Twist
 from nav2_msgs.action import NavigateToPose
@@ -55,8 +56,12 @@ class MapperExplorer(Node):
         self.map_msg = None
         self.robot_x = None
         self.robot_y = None
+        self.amcl_x = None
+        self.amcl_y = None
         self._map_rx_logged = False
         self._odom_rx_logged = False
+        self._amcl_rx_logged = False
+        self._progress_pose_source = None
         self.state = ExplorerState.IDLE
         self.phase = Phase.RICH
         self.goal_active = False
@@ -96,6 +101,21 @@ class MapperExplorer(Node):
         )
         self.wait_for_nav2_server_log_interval_sec = self._declare_and_get_float(
             'wait_for_nav2_server_log_interval_sec', 5.0
+        )
+        self.stuck_detection_enabled = self._declare_and_get_bool(
+            'stuck_detection_enabled', True
+        )
+        self.drive_cmd_window_sec = self._declare_and_get_float(
+            'drive_cmd_window_sec', 6.0
+        )
+        self.drive_cmd_linear_min = self._declare_and_get_float(
+            'drive_cmd_linear_min', 0.05
+        )
+        self.drive_cmd_min_progress_m = self._declare_and_get_float(
+            'drive_cmd_min_progress_m', 0.05
+        )
+        self.stuck_recovery_cooldown_sec = self._declare_and_get_float(
+            'stuck_recovery_cooldown_sec', 10.0
         )
         self.initial_spin_started_sec = None
         self.initial_spin_done = False
@@ -150,11 +170,21 @@ class MapperExplorer(Node):
         self.last_blacklist_clear_time_sec = None
         self.same_goal_reject_radius_m = self._declare_and_get_float('same_goal_reject_radius_m', 0.20)
         self.same_goal_reject_window_sec = self._declare_and_get_float('same_goal_reject_window_sec', 12.0)
+        self.last_cmd_linear = 0.0
+        self.last_cmd_angular = 0.0
+        self.last_drive_cmd_time_sec = None
+        self.cmd_progress_check_start_pose = None
+        self.cmd_progress_check_start_time_sec = None
+        self.last_stuck_recovery_time_sec = None
 
         self.nav_client = ActionClient(self, NavigateToPose, '/navigate_to_pose')
         self.cmd_vel_pub = self.create_publisher(Twist, '/cmd_vel', 10)
         self.create_subscription(OccupancyGrid, '/map', self.map_callback, map_qos)
         self.create_subscription(Odometry, '/odom', self.odom_callback, qos_profile_sensor_data)
+        self.create_subscription(
+            PoseWithCovarianceStamped, '/amcl_pose', self.amcl_pose_callback, 10
+        )
+        self.create_subscription(Twist, '/cmd_vel', self.cmd_vel_callback, 10)
         self.timer = self.create_timer(1.0, self.step)
         self.cmd_timer = self.create_timer(0.1, self.cmd_tick)
 
@@ -171,6 +201,19 @@ class MapperExplorer(Node):
             self.get_logger().info('Received /odom')
             self._odom_rx_logged = True
 
+    def amcl_pose_callback(self, msg):
+        self.amcl_x = msg.pose.pose.position.x
+        self.amcl_y = msg.pose.pose.position.y
+        if not self._amcl_rx_logged:
+            self.get_logger().info('Received /amcl_pose')
+            self._amcl_rx_logged = True
+
+    def cmd_vel_callback(self, msg):
+        self.last_cmd_linear = msg.linear.x
+        self.last_cmd_angular = msg.angular.z
+        if abs(msg.linear.x) >= self.drive_cmd_linear_min:
+            self.last_drive_cmd_time_sec = self._now_sec()
+
     def step(self):
         if self.map_msg is None or self.robot_x is None:
             return
@@ -181,6 +224,7 @@ class MapperExplorer(Node):
         self._prune_blacklist()
         self._prune_hard_blacklist()
         self._update_progress_and_recover()
+        self._detect_stuck_by_cmd_progress()
 
         if self.state == ExplorerState.IDLE:
             self.state = ExplorerState.SELECT_GOAL
@@ -332,6 +376,19 @@ class MapperExplorer(Node):
 
         return False
 
+    def _current_progress_pose(self):
+        if self.amcl_x is not None and self.amcl_y is not None:
+            source = 'amcl'
+            pose = (self.amcl_x, self.amcl_y)
+        else:
+            source = 'odom'
+            pose = (self.robot_x, self.robot_y)
+
+        if self._progress_pose_source != source:
+            self._progress_pose_source = source
+            self.get_logger().info(f'Progress pose source: {source}')
+        return pose
+
     @staticmethod
     def _goal_key(goal_xy):
         return (round(goal_xy[0], 2), round(goal_xy[1], 2))
@@ -410,14 +467,15 @@ class MapperExplorer(Node):
 
     def _update_progress_and_recover(self):
         now = self._now_sec()
+        current_x, current_y = self._current_progress_pose()
         if self.last_progress_pose is None:
-            self.last_progress_pose = (self.robot_x, self.robot_y)
+            self.last_progress_pose = (current_x, current_y)
             self.last_progress_time_sec = now
             return
         px, py = self.last_progress_pose
-        moved = ((self.robot_x - px) ** 2 + (self.robot_y - py) ** 2) ** 0.5
+        moved = ((current_x - px) ** 2 + (current_y - py) ** 2) ** 0.5
         if moved >= self.progress_min_distance_m:
-            self.last_progress_pose = (self.robot_x, self.robot_y)
+            self.last_progress_pose = (current_x, current_y)
             self.last_progress_time_sec = now
             return
         if self.last_progress_time_sec is not None:
@@ -428,7 +486,7 @@ class MapperExplorer(Node):
                         f'No meaningful motion for {stalled:.1f}s. Cancel current goal.'
                     )
                     self.last_stalled_cancel_time_sec = now
-                    self.last_progress_pose = (self.robot_x, self.robot_y)
+                    self.last_progress_pose = (current_x, current_y)
                     self.last_progress_time_sec = now
                     self.cancel_active_goal(reason='stalled_progress')
                     return
@@ -442,8 +500,55 @@ class MapperExplorer(Node):
                     f'no meaningful motion for {stalled:.1f}s'
                 )
                 if cleared:
-                    self.last_progress_pose = (self.robot_x, self.robot_y)
+                    self.last_progress_pose = (current_x, current_y)
                     self.last_progress_time_sec = now
+
+    def _reset_cmd_progress_check(self):
+        self.cmd_progress_check_start_pose = None
+        self.cmd_progress_check_start_time_sec = None
+
+    def _detect_stuck_by_cmd_progress(self):
+        if not self.stuck_detection_enabled:
+            return
+        if not self.goal_active:
+            self._reset_cmd_progress_check()
+            return
+        now = self._now_sec()
+        if (
+            self.last_drive_cmd_time_sec is None
+            or (now - self.last_drive_cmd_time_sec) > self.drive_cmd_window_sec
+        ):
+            self._reset_cmd_progress_check()
+            return
+        if (
+            self.last_stuck_recovery_time_sec is not None
+            and (now - self.last_stuck_recovery_time_sec) < self.stuck_recovery_cooldown_sec
+        ):
+            return
+
+        current_pose = self._current_progress_pose()
+        if self.cmd_progress_check_start_pose is None:
+            self.cmd_progress_check_start_pose = current_pose
+            self.cmd_progress_check_start_time_sec = now
+            return
+
+        elapsed = now - self.cmd_progress_check_start_time_sec
+        if elapsed < self.drive_cmd_window_sec:
+            return
+        sx, sy = self.cmd_progress_check_start_pose
+        moved = ((current_pose[0] - sx) ** 2 + (current_pose[1] - sy) ** 2) ** 0.5
+        if moved >= self.drive_cmd_min_progress_m:
+            self.cmd_progress_check_start_pose = current_pose
+            self.cmd_progress_check_start_time_sec = now
+            return
+
+        self.get_logger().warning(
+            'Detected low progress despite drive commands '
+            f'(window={elapsed:.1f}s, moved={moved:.2f}m). Cancel current goal.'
+        )
+        self.last_stuck_recovery_time_sec = now
+        self._reset_cmd_progress_check()
+        self.cancel_active_goal(reason='stuck_cmd_progress')
 
     def _select_goal(
         self,
@@ -751,11 +856,11 @@ class MapperExplorer(Node):
         if response is not None and len(response.goals_canceling) > 0:
             self.get_logger().info(f'Goal canceled ({reason}).')
             self.last_status = GoalStatus.STATUS_CANCELED
-            if reason in ('timeout', 'stalled_progress') and self.current_goal is not None:
+            if reason in ('timeout', 'stalled_progress', 'stuck_cmd_progress') and self.current_goal is not None:
                 key = self._goal_key(self.current_goal)
                 self._add_blacklist(key)
                 self._add_hard_blacklist(key)
-                if reason == 'stalled_progress':
+                if reason in ('stalled_progress', 'stuck_cmd_progress'):
                     cnt = self.stalled_goal_count.get(key, 0) + 1
                     self.stalled_goal_count[key] = cnt
                     if cnt >= self.stalled_hotspot_trigger_count:

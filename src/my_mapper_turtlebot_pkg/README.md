@@ -62,6 +62,11 @@ source ~/robot_ws/install/setup.bash
 - `goal_reselection_cooldown_sec` (기본 `4.0`)
 - `wait_for_nav2_server_timeout_sec` (기본 `120.0`)
 - `wait_for_nav2_server_log_interval_sec` (기본 `5.0`)
+- `stuck_detection_enabled` (기본 `true`)
+- `drive_cmd_window_sec` (기본 `6.0`)
+- `drive_cmd_linear_min` (기본 `0.05`)
+- `drive_cmd_min_progress_m` (기본 `0.05`)
+- `stuck_recovery_cooldown_sec` (기본 `10.0`)
 - `goal_timeout_sec` (기본 `45.0`)
 - `min_goal_distance` (기본 `0.35`)
 - `max_obstacle_density` (기본 `0.22`)
@@ -70,3 +75,4 @@ source ~/robot_ws/install/setup.bash
 ## 운영 팁
 - Nav2 로그에 `Managed nodes are active`가 뜬 뒤 `mapper_explorer`를 실행하세요.
 - 실기에서 `planner loop missed ...`가 자주 뜨면 RViz를 끄거나 디스플레이를 최소화하세요.
+- `/amcl_pose`가 들어오면 진행 판정은 `amcl` 기준으로, 없으면 `odom` 기준으로 자동 fallback 됩니다.
