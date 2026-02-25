@@ -35,7 +35,8 @@ source ~/robot_ws/install/setup.bash
    - `source /opt/ros/humble/setup.bash`
    - `source ~/robot_ws/install/setup.bash`
    - `export ROS_DOMAIN_ID=4`
-   - `ros2 launch nav2_bringup bringup_launch.py use_sim_time:=false slam:=True params_file:=/home/penguin/robot_ws/src/my_mapper_turtlebot_pkg/config/nav2_params_real.yaml autostart:=true use_composition:=False use_respawn:=False`
+   - `ros2 launch nav2_bringup bringup_launch.py use_sim_time:=false slam:=True map:=/home/penguin/robot_ws/src/my_mapper_turtlebot_pkg/maps/stress_maze_map.yaml params_file:=/home/penguin/robot_ws/src/my_mapper_turtlebot_pkg/config/nav2_params_real.yaml autostart:=true use_composition:=False use_respawn:=False`
+   - 참고: 현재 환경의 `bringup_launch.py`는 `slam:=True`여도 `map` 인자를 필수로 요구합니다.
    - 정적 맵 기반 localization 모드라면 `slam:=False map:=...` 조합을 사용하세요.
 3. Explorer
    - `ros2 run my_mapper_turtlebot_pkg mapper_explorer --ros-args -p use_sim_time:=false`
