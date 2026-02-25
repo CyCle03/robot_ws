@@ -14,7 +14,7 @@
 - 탐색 노드만 실행:
   - `ros2 launch my_mapper_turtlebot_pkg mapper_explorer.launch.py`
 - stress maze 통합 실행:
-  - `ros2 launch my_mapper_turtlebot_pkg stress_maze_explorer.launch.py`
+  - `ros2 launch my_mapper_turtlebot_pkg stress_maze_explorer.launch.py use_sim_time:=true`
 - 분리 실행:
   1. `ros2 launch my_mapper_turtlebot_pkg stress_maze_world.launch.py use_sim_time:=true`
   2. `ros2 launch nav2_bringup bringup_launch.py use_sim_time:=true map:=/home/penguin/robot_ws/src/my_mapper_turtlebot_pkg/maps/stress_maze_map.yaml params_file:=/home/penguin/robot_ws/src/my_mapper_turtlebot_pkg/config/nav2_params_stress_maze.yaml autostart:=true use_composition:=False use_respawn:=False`
@@ -27,21 +27,24 @@
 
 ## 5. 주요 탐색 파라미터(현재값)
 - Goal timeout: `45s`
-- 정체 판정: `progress_stall_reset_sec = 18s`
+- 정체 판정: `progress_stall_reset_sec = 28s`
 - 정체 취소 후 블랙리스트 초기화 유예: `post_stall_blacklist_clear_grace_sec = 45s`
 - 정체 취소 후 병목 재진입 억제:
-  - `post_stall_hard_blacklist_boost_sec = 60s`
-  - `post_stall_hard_blacklist_radius_boost = 0.50m`
+  - `post_stall_hard_blacklist_boost_sec = 30s`
+  - `post_stall_hard_blacklist_radius_boost = 0.20m`
 - 최근 goal 재선정 억제:
   - `recent_goals_maxlen = 8`
   - `recent_goal_radius = 1.00m`
   - `recent_goal_penalty = 2.3`
 - 장애물/안전거리 관련:
-  - `max_obstacle_density = 0.24`
+  - `max_obstacle_density = 0.22`
   - `min_clearance_radius_cells = 2`
-  - `hard_blacklist_radius = 0.95m`
-  - `hard_blacklist_ttl_sec = 120s`
+  - `hard_blacklist_radius = 0.60m`
+  - `hard_blacklist_ttl_sec = 45s`
   - `stalled_hotspot_trigger_count = 1`
+- Nav2 준비 대기:
+  - `wait_for_nav2_server_timeout_sec = 120s`
+  - `wait_for_nav2_server_log_interval_sec = 5s`
 
 ## 6. Nav2 튜닝 포인트(현재값)
 - `config/nav2_params_stress_maze.yaml` 기준

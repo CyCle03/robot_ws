@@ -32,6 +32,18 @@ class Phase(Enum):
 
 
 class MapperExplorer(Node):
+    def _declare_and_get_bool(self, name, default):
+        self.declare_parameter(name, default)
+        return bool(self.get_parameter(name).value)
+
+    def _declare_and_get_int(self, name, default):
+        self.declare_parameter(name, default)
+        return int(self.get_parameter(name).value)
+
+    def _declare_and_get_float(self, name, default):
+        self.declare_parameter(name, default)
+        return float(self.get_parameter(name).value)
+
     def __init__(self):
         super().__init__('mapper_explorer')
         map_qos = QoSProfile(
@@ -67,65 +79,77 @@ class MapperExplorer(Node):
         self.last_goal_selected_time_sec = None
         self.last_dispatched_goal = None
         self.last_dispatched_goal_time_sec = None
-        self.declare_parameter('initial_spin_enabled', True)
-        self.declare_parameter('initial_spin_duration_sec', 2.0)
-        self.declare_parameter('initial_spin_angular_vel', 0.60)
-        self.declare_parameter('goal_reselection_cooldown_sec', 4.0)
-        self.initial_spin_enabled = bool(
-            self.get_parameter('initial_spin_enabled').value
+        self.initial_spin_enabled = self._declare_and_get_bool(
+            'initial_spin_enabled', True
         )
-        self.initial_spin_duration_sec = float(
-            self.get_parameter('initial_spin_duration_sec').value
+        self.initial_spin_duration_sec = self._declare_and_get_float(
+            'initial_spin_duration_sec', 2.0
         )
-        self.initial_spin_angular_vel = float(
-            self.get_parameter('initial_spin_angular_vel').value
+        self.initial_spin_angular_vel = self._declare_and_get_float(
+            'initial_spin_angular_vel', 0.60
         )
-        self.goal_reselection_cooldown_sec = float(
-            self.get_parameter('goal_reselection_cooldown_sec').value
+        self.goal_reselection_cooldown_sec = self._declare_and_get_float(
+            'goal_reselection_cooldown_sec', 4.0
+        )
+        self.wait_for_nav2_server_timeout_sec = self._declare_and_get_float(
+            'wait_for_nav2_server_timeout_sec', 120.0
+        )
+        self.wait_for_nav2_server_log_interval_sec = self._declare_and_get_float(
+            'wait_for_nav2_server_log_interval_sec', 5.0
         )
         self.initial_spin_started_sec = None
         self.initial_spin_done = False
         self.initial_spin_stop_sent = False
+        self.nav2_wait_started_sec = None
+        self.nav2_server_ready = False
+        self.nav2_wait_timeout_logged = False
+        self.last_nav2_wait_log_sec = None
 
-        self.rich_min_density = 0.0
-        self.rich_min_unknown_gain = 0.12
-        self.goal_timeout_sec = 45.0
-        self.max_goal_retries = 1
-        self.frontier_min_cluster_size = 5
-        self.w_dist = 1.0
-        self.w_obs = 0.9
-        self.w_info = 1.8
-        self.w_visit = 0.8
-        self.min_goal_distance = 0.35
-        self.distance_reward_cap_m = 2.5
-        self.max_obstacle_density = 0.22
-        self.blacklist_radius = 0.75
-        self.hard_blacklist_radius = 0.60
-        self.recent_goal_radius = 1.00
-        self.recent_goal_penalty = 2.3
-        self.map_margin_cells = 2
-        self.min_clearance_radius_cells = 2
-        self.hard_blacklist_ttl_sec = 45.0
-        self.stalled_hotspot_ttl_sec = 180.0
-        self.stalled_hotspot_trigger_count = 1
-        self.blacklist_ttl_sec = 35.0
-        self.no_goal_relax_after_sec = 12.0
-        self.obstacle_density_radius_cells = 4
-        self.false_success_min_planned_m = 0.35
-        self.false_success_min_moved_m = 0.20
-        self.goal_reached_tolerance_m = 0.20
-        self.progress_min_distance_m = 0.20
-        self.progress_stall_reset_sec = 28.0
-        self.post_stall_blacklist_clear_grace_sec = 45.0
-        self.post_stall_hard_blacklist_boost_sec = 30.0
-        self.post_stall_hard_blacklist_radius_boost = 0.20
+        self.rich_min_density = self._declare_and_get_float('rich_min_density', 0.0)
+        self.rich_min_unknown_gain = self._declare_and_get_float('rich_min_unknown_gain', 0.12)
+        self.goal_timeout_sec = self._declare_and_get_float('goal_timeout_sec', 45.0)
+        self.max_goal_retries = self._declare_and_get_int('max_goal_retries', 1)
+        self.frontier_min_cluster_size = self._declare_and_get_int('frontier_min_cluster_size', 5)
+        self.w_dist = self._declare_and_get_float('w_dist', 1.0)
+        self.w_obs = self._declare_and_get_float('w_obs', 0.9)
+        self.w_info = self._declare_and_get_float('w_info', 1.8)
+        self.w_visit = self._declare_and_get_float('w_visit', 0.8)
+        self.min_goal_distance = self._declare_and_get_float('min_goal_distance', 0.35)
+        self.distance_reward_cap_m = self._declare_and_get_float('distance_reward_cap_m', 2.5)
+        self.max_obstacle_density = self._declare_and_get_float('max_obstacle_density', 0.22)
+        self.blacklist_radius = self._declare_and_get_float('blacklist_radius', 0.75)
+        self.hard_blacklist_radius = self._declare_and_get_float('hard_blacklist_radius', 0.60)
+        self.recent_goal_radius = self._declare_and_get_float('recent_goal_radius', 1.00)
+        self.recent_goal_penalty = self._declare_and_get_float('recent_goal_penalty', 2.3)
+        self.map_margin_cells = self._declare_and_get_int('map_margin_cells', 2)
+        self.min_clearance_radius_cells = self._declare_and_get_int('min_clearance_radius_cells', 2)
+        self.hard_blacklist_ttl_sec = self._declare_and_get_float('hard_blacklist_ttl_sec', 45.0)
+        self.stalled_hotspot_ttl_sec = self._declare_and_get_float('stalled_hotspot_ttl_sec', 180.0)
+        self.stalled_hotspot_trigger_count = self._declare_and_get_int('stalled_hotspot_trigger_count', 1)
+        self.blacklist_ttl_sec = self._declare_and_get_float('blacklist_ttl_sec', 35.0)
+        self.no_goal_relax_after_sec = self._declare_and_get_float('no_goal_relax_after_sec', 12.0)
+        self.obstacle_density_radius_cells = self._declare_and_get_int('obstacle_density_radius_cells', 4)
+        self.false_success_min_planned_m = self._declare_and_get_float('false_success_min_planned_m', 0.35)
+        self.false_success_min_moved_m = self._declare_and_get_float('false_success_min_moved_m', 0.20)
+        self.goal_reached_tolerance_m = self._declare_and_get_float('goal_reached_tolerance_m', 0.20)
+        self.progress_min_distance_m = self._declare_and_get_float('progress_min_distance_m', 0.20)
+        self.progress_stall_reset_sec = self._declare_and_get_float('progress_stall_reset_sec', 28.0)
+        self.post_stall_blacklist_clear_grace_sec = self._declare_and_get_float(
+            'post_stall_blacklist_clear_grace_sec', 45.0
+        )
+        self.post_stall_hard_blacklist_boost_sec = self._declare_and_get_float(
+            'post_stall_hard_blacklist_boost_sec', 30.0
+        )
+        self.post_stall_hard_blacklist_radius_boost = self._declare_and_get_float(
+            'post_stall_hard_blacklist_radius_boost', 0.20
+        )
         self.last_progress_pose = None
         self.last_progress_time_sec = None
         self.last_stalled_cancel_time_sec = None
-        self.blacklist_clear_cooldown_sec = 15.0
+        self.blacklist_clear_cooldown_sec = self._declare_and_get_float('blacklist_clear_cooldown_sec', 15.0)
         self.last_blacklist_clear_time_sec = None
-        self.same_goal_reject_radius_m = 0.20
-        self.same_goal_reject_window_sec = 12.0
+        self.same_goal_reject_radius_m = self._declare_and_get_float('same_goal_reject_radius_m', 0.20)
+        self.same_goal_reject_window_sec = self._declare_and_get_float('same_goal_reject_window_sec', 12.0)
 
         self.nav_client = ActionClient(self, NavigateToPose, '/navigate_to_pose')
         self.cmd_vel_pub = self.create_publisher(Twist, '/cmd_vel', 10)
@@ -151,6 +175,8 @@ class MapperExplorer(Node):
         if self.map_msg is None or self.robot_x is None:
             return
         if self._run_initial_spin():
+            return
+        if not self._wait_for_nav2_server():
             return
         self._prune_blacklist()
         self._prune_hard_blacklist()
@@ -187,7 +213,8 @@ class MapperExplorer(Node):
                     self.state = ExplorerState.DONE
                 return
 
-            self.send_nav_goal(goal)
+            if not self.send_nav_goal(goal):
+                return
             self.current_goal = goal
             self.last_goal_selected_time_sec = self._now_sec()
             self.state = ExplorerState.NAVIGATING
@@ -269,6 +296,41 @@ class MapperExplorer(Node):
 
     def _now_sec(self):
         return self.get_clock().now().nanoseconds / 1e9
+
+    def _wait_for_nav2_server(self):
+        if self.nav_client.server_is_ready():
+            if not self.nav2_server_ready:
+                self.nav2_server_ready = True
+                self.get_logger().info('NavigateToPose server is ready.')
+            return True
+
+        now = self._now_sec()
+        if self.nav2_wait_started_sec is None:
+            self.nav2_wait_started_sec = now
+            self.last_nav2_wait_log_sec = now
+            self.get_logger().info('Waiting for NavigateToPose server...')
+            return False
+
+        if (
+            self.last_nav2_wait_log_sec is None
+            or (now - self.last_nav2_wait_log_sec) >= self.wait_for_nav2_server_log_interval_sec
+        ):
+            elapsed = now - self.nav2_wait_started_sec
+            self.get_logger().info(f'Waiting for NavigateToPose server... ({elapsed:.1f}s)')
+            self.last_nav2_wait_log_sec = now
+
+        if (
+            not self.nav2_wait_timeout_logged
+            and self.wait_for_nav2_server_timeout_sec > 0.0
+            and (now - self.nav2_wait_started_sec) >= self.wait_for_nav2_server_timeout_sec
+        ):
+            self.get_logger().warning(
+                'NavigateToPose server still unavailable after '
+                f'{self.wait_for_nav2_server_timeout_sec:.1f}s. Continuing to wait.'
+            )
+            self.nav2_wait_timeout_logged = True
+
+        return False
 
     @staticmethod
     def _goal_key(goal_xy):
@@ -571,9 +633,11 @@ class MapperExplorer(Node):
         if not self.nav_client.wait_for_server(timeout_sec=1.0):
             self.get_logger().warning('NavigateToPose server unavailable.')
             self.goal_active = False
+            self.goal_handle = None
+            self.goal_sent_time_sec = None
+            self.goal_start_pose = None
             self.last_status = GoalStatus.STATUS_ABORTED
-            self.state = ExplorerState.EVALUATE
-            return
+            return False
 
         gx, gy = goal_xy
         goal = NavigateToPose.Goal()
@@ -597,6 +661,7 @@ class MapperExplorer(Node):
         self.last_dispatched_goal_time_sec = self._now_sec()
         future = self.nav_client.send_goal_async(goal)
         future.add_done_callback(self.goal_response_callback)
+        return True
 
     def goal_response_callback(self, future):
         try:

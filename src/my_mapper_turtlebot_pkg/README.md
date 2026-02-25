@@ -14,12 +14,15 @@ source ~/robot_ws/install/setup.bash
 - 탐색 노드만 실행:
   - `ros2 launch my_mapper_turtlebot_pkg mapper_explorer.launch.py use_sim_time:=true`
 - stress maze 통합 실행:
-  - `ros2 launch my_mapper_turtlebot_pkg stress_maze_explorer.launch.py`
+  - `ros2 launch my_mapper_turtlebot_pkg stress_maze_explorer.launch.py use_sim_time:=true`
 - 분리 실행(권장 순서):
   1. `ros2 launch my_mapper_turtlebot_pkg stress_maze_world.launch.py use_sim_time:=true`
   2. `ros2 launch nav2_bringup bringup_launch.py use_sim_time:=true map:=/home/penguin/robot_ws/src/my_mapper_turtlebot_pkg/maps/stress_maze_map.yaml params_file:=/home/penguin/robot_ws/src/my_mapper_turtlebot_pkg/config/nav2_params_stress_maze.yaml autostart:=true use_composition:=False use_respawn:=False`
   3. `ros2 run my_mapper_turtlebot_pkg mapper_explorer --ros-args -p use_sim_time:=true`
   4. `rviz2 -d /home/penguin/robot_ws/src/my_mapper_turtlebot_pkg/rviz/explorer.rviz`
+
+통합 실행에서 map/params를 바꾸려면:
+- `ros2 launch my_mapper_turtlebot_pkg stress_maze_explorer.launch.py use_sim_time:=true map:=/home/penguin/robot_ws/src/my_mapper_turtlebot_pkg/maps/stress_maze_map.yaml nav2_params:=/home/penguin/robot_ws/src/my_mapper_turtlebot_pkg/config/nav2_params_stress_maze.yaml`
 
 ## 실행 (실기)
 1. 로봇 bringup (로봇 PC)
@@ -32,7 +35,8 @@ source ~/robot_ws/install/setup.bash
    - `source /opt/ros/humble/setup.bash`
    - `source ~/robot_ws/install/setup.bash`
    - `export ROS_DOMAIN_ID=4`
-   - `ros2 launch nav2_bringup bringup_launch.py use_sim_time:=false slam:=True map:=/home/penguin/robot_ws/src/my_mapper_turtlebot_pkg/maps/stress_maze_map.yaml params_file:=/home/penguin/robot_ws/src/my_mapper_turtlebot_pkg/config/nav2_params_real.yaml autostart:=true use_composition:=False use_respawn:=False`
+   - `ros2 launch nav2_bringup bringup_launch.py use_sim_time:=false slam:=True params_file:=/home/penguin/robot_ws/src/my_mapper_turtlebot_pkg/config/nav2_params_real.yaml autostart:=true use_composition:=False use_respawn:=False`
+   - 정적 맵 기반 localization 모드라면 `slam:=False map:=...` 조합을 사용하세요.
 3. Explorer
    - `ros2 run my_mapper_turtlebot_pkg mapper_explorer --ros-args -p use_sim_time:=false`
 4. RViz (선택)
@@ -55,6 +59,12 @@ source ~/robot_ws/install/setup.bash
 - `initial_spin_duration_sec` (기본 `2.0`)
 - `initial_spin_angular_vel` (기본 `0.60`)
 - `goal_reselection_cooldown_sec` (기본 `4.0`)
+- `wait_for_nav2_server_timeout_sec` (기본 `120.0`)
+- `wait_for_nav2_server_log_interval_sec` (기본 `5.0`)
+- `goal_timeout_sec` (기본 `45.0`)
+- `min_goal_distance` (기본 `0.35`)
+- `max_obstacle_density` (기본 `0.22`)
+- `progress_stall_reset_sec` (기본 `28.0`)
 
 ## 운영 팁
 - Nav2 로그에 `Managed nodes are active`가 뜬 뒤 `mapper_explorer`를 실행하세요.
